@@ -8002,24 +8002,58 @@ async function renderAdminVideoLibrary(){
       <button class="topbar-close" style="font-size:16px;" onclick="adminDeleteVideo('${v.id}')" aria-label="Supprimer">&#x1f5d1;&#xfe0f;</button>
     </div>`).join('');
 }
+function adminVideoShowProgress(pct, label){
+  const statusEl = document.getElementById('adminVideoUploadStatus');
+  if(!statusEl) return;
+  statusEl.style.display='block';
+  statusEl.innerHTML = `<div class="dm-upload-row" style="gap:10px;">
+    <div style="flex:1;height:8px;border-radius:6px;background:rgba(0,0,0,.08);overflow:hidden;">
+      <div style="height:100%;width:${Math.max(0,Math.min(100,pct))}%;background:var(--purple);transition:width .15s;"></div>
+    </div>
+    <span style="font-size:12px;font-weight:700;min-width:70px;text-align:right;">${label!=null?label:pct+'%'}</span>
+  </div>`;
+}
+// Upload direct en XHR (plutôt que sb.storage.upload, basé sur fetch) pour
+// pouvoir suivre la progression réelle de l'envoi et l'afficher en %.
+function adminUploadFileWithProgress(path, file, token){
+  return new Promise((resolve, reject)=>{
+    const encodedPath = path.split('/').map(encodeURIComponent).join('/');
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${SUPABASE_URL}/storage/v1/object/admin-videos/${encodedPath}`);
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.setRequestHeader('apikey', SUPABASE_ANON_KEY);
+    xhr.setRequestHeader('Content-Type', file.type || 'video/mp4');
+    xhr.setRequestHeader('x-upsert', 'false');
+    xhr.upload.onprogress = (e)=>{
+      if(e.lengthComputable) adminVideoShowProgress(Math.round((e.loaded/e.total)*100));
+    };
+    xhr.onload = ()=>{ (xhr.status>=200 && xhr.status<300) ? resolve() : reject(new Error('upload_'+xhr.status)); };
+    xhr.onerror = ()=> reject(new Error('upload_network'));
+    xhr.send(file);
+  });
+}
 async function adminUploadVideo(file, silent=false){
   if(!file || !sbUser) return false;
   const statusEl = document.getElementById('adminVideoUploadStatus');
-  if(statusEl){ statusEl.style.display='block'; statusEl.textContent = 'Envoi en cours…'; }
+  adminVideoShowProgress(0);
   try{
+    const { data: sessionData } = await sb.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if(!token) throw new Error('no_session');
     const path = `${sbUser.id}/${Date.now()}_${file.name}`;
-    const { error: upErr } = await sb.storage.from('admin-videos').upload(path, file, { contentType: file.type || 'video/mp4' });
-    if(upErr) throw upErr;
+    await adminUploadFileWithProgress(path, file, token);
+    adminVideoShowProgress(100);
     const { data: pub } = sb.storage.from('admin-videos').getPublicUrl(path);
     const title = file.name.replace(/\.[^.]+$/, '');
-    const { error: insErr } = await sb.from('admin_call_videos').insert({ title, video_url: pub.publicUrl, created_by: sbUser.id });
+    const { error: insErr } = await sb.from('admin_call_videos').insert({ title, video_url: pub.publicUrl, storage_path: path, created_by: sbUser.id });
     if(insErr) throw insErr;
-    if(statusEl){ statusEl.style.display='none'; }
+    if(statusEl){ statusEl.style.display='none'; statusEl.innerHTML=''; }
     if(!silent) showToast('Vidéo ajoutée', '&#x2705;');
     await renderAdminVideoLibrary();
     return true;
   }catch(e){
-    if(statusEl){ statusEl.textContent = 'Échec de l\'envoi.'; }
+    console.error('[adminUploadVideo]', e && e.message);
+    if(statusEl){ statusEl.style.display='block'; statusEl.innerHTML=''; statusEl.textContent = 'Échec de l\'envoi.'; }
     if(!silent) showToast('Échec de l\'ajout de la vidéo', '&#x26a0;&#xfe0f;');
     return false;
   }
@@ -8030,9 +8064,19 @@ function adminOpenVideoManagerFromCalls(){
   setTimeout(()=>{ const input=document.getElementById('adminVideoFileInput2'); if(input) input.click(); },80);
 }
 async function adminDeleteVideo(id){
-  const { error } = await sb.from('admin_call_videos').delete().eq('id', id);
-  if(error){ showToast('Suppression impossible', '&#x26a0;&#xfe0f;'); return; }
-  renderAdminVideoLibrary();
+  if(!confirm('Supprimer définitivement cette vidéo de la bibliothèque ?')) return;
+  const video = adminVideoLibraryCache.find(v=> String(v.id)===String(id));
+  try{
+    if(video && video.storage_path){
+      await sb.storage.from('admin-videos').remove([video.storage_path]);
+    }
+    const { error } = await sb.from('admin_call_videos').delete().eq('id', id);
+    if(error) throw error;
+    showToast('Vidéo supprimée', '&#x2705;');
+    renderAdminVideoLibrary();
+  }catch(e){
+    showToast('Suppression impossible', '&#x26a0;&#xfe0f;');
+  }
 }
 
 /* ---- Sélection OBLIGATOIRE d'une vidéo (comptes admin, appels vidéo) ----
