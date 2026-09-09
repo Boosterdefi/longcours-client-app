@@ -3488,7 +3488,7 @@ button,input,textarea,select{max-width:100%;}
 
           <div class="admin-panel" id="adminPanelSupport"><div class="admin-card"><div class="admin-card-head"><h3>💬 Support client</h3><small>Réponses en tant que support</small></div><input class="admin-input admin-search" id="adminSupportSearch" placeholder="Rechercher un ticket…" oninput="adminFilterSupport()"><div class="admin-list" id="adminSupportList"><div class="admin-empty">Chargement…</div></div></div></div>
 
-          <div class="admin-panel" id="adminPanelCalls"><div class="admin-card"><div class="admin-card-head"><h3>📞 Appels audio & vidéo</h3></div><input class="admin-input admin-search" id="adminCallSearch" placeholder="Trouver un utilisateur…" oninput="adminFilterCallUsers()"><div class="admin-list" id="adminCallUsersList"><div class="admin-empty">Charge les utilisateurs…</div></div><div class="admin-note" style="margin-top:10px">Les appels utilisent la messagerie et WebRTC existants. L'appel part depuis le contexte administrateur, sans modifier l'identité du compte utilisateur.</div></div></div>
+          <div class="admin-panel" id="adminPanelCalls"><div class="admin-card"><div class="admin-card-head"><div><h3>📞 Appels audio & vidéo</h3><small>Appel depuis le compte Admin</small></div><button class="admin-btn primary" type="button" onclick="adminOpenVideoManagerFromCalls()">🎬 Ajouter une vidéo</button></div><div class="admin-note" style="margin-bottom:10px">Pour un appel vidéo, sélectionne une vidéo de ta bibliothèque. Si la bibliothèque est vide, le bouton ci-dessus permet d'en ajouter une immédiatement.</div><input class="admin-input admin-search" id="adminCallSearch" placeholder="Trouver un utilisateur…" oninput="adminFilterCallUsers()"><div class="admin-list" id="adminCallUsersList"><div class="admin-empty">Charge les utilisateurs…</div></div><div class="admin-note" style="margin-top:10px">Les appels utilisent la messagerie et WebRTC existants. L'appel part depuis le contexte administrateur, sans modifier l'identité du compte utilisateur.</div></div></div>
 
           <div class="admin-panel" id="adminPanelSettings"><div class="admin-card"><div class="admin-card-head"><h3>⚙️ Paramètres économiques</h3><small>Globaux & visibles</small></div><div class="admin-grid two">
             <div class="admin-field"><div class="admin-label">Activation USDT</div><input class="admin-input" id="setActivation" type="number" step="0.01"></div>
@@ -8002,8 +8002,8 @@ async function renderAdminVideoLibrary(){
       <button class="topbar-close" style="font-size:16px;" onclick="adminDeleteVideo('${v.id}')" aria-label="Supprimer">&#x1f5d1;&#xfe0f;</button>
     </div>`).join('');
 }
-async function adminUploadVideo(file){
-  if(!file || !sbUser) return;
+async function adminUploadVideo(file, silent=false){
+  if(!file || !sbUser) return false;
   const statusEl = document.getElementById('adminVideoUploadStatus');
   if(statusEl){ statusEl.style.display='block'; statusEl.textContent = 'Envoi en cours…'; }
   try{
@@ -8015,12 +8015,19 @@ async function adminUploadVideo(file){
     const { error: insErr } = await sb.from('admin_call_videos').insert({ title, video_url: pub.publicUrl, created_by: sbUser.id });
     if(insErr) throw insErr;
     if(statusEl){ statusEl.style.display='none'; }
-    showToast('Vidéo ajoutée', '&#x2705;');
-    renderAdminVideoLibrary();
+    if(!silent) showToast('Vidéo ajoutée', '&#x2705;');
+    await renderAdminVideoLibrary();
+    return true;
   }catch(e){
     if(statusEl){ statusEl.textContent = 'Échec de l\'envoi.'; }
-    showToast('Échec de l\'ajout de la vidéo', '&#x26a0;&#xfe0f;');
+    if(!silent) showToast('Échec de l\'ajout de la vidéo', '&#x26a0;&#xfe0f;');
+    return false;
   }
+}
+function adminOpenVideoManagerFromCalls(){
+  const videosBtn = Array.from(document.querySelectorAll('#adminTabs .admin-tab')).find(b => (b.textContent||'').includes('Vidéos'));
+  adminTab('videos', videosBtn);
+  setTimeout(()=>{ const input=document.getElementById('adminVideoFileInput2'); if(input) input.click(); },80);
 }
 async function adminDeleteVideo(id){
   const { error } = await sb.from('admin_call_videos').delete().eq('id', id);
@@ -8039,8 +8046,22 @@ function dmRequireAdminCallVideo(){
   return new Promise(async (resolve)=>{
     const { data, error } = await sb.from('admin_call_videos').select('*').order('created_at', { ascending:false });
     if(error || !data || !data.length){
-      showToast('Ajoute une vidéo à la bibliothèque avant un appel vidéo', '&#x26a0;&#xfe0f;');
-      resolve(null);
+      const callOverlay=document.getElementById('dmCallOverlay');
+      if(!callOverlay){ resolve(null); return; }
+      const oldPanel=document.getElementById('dmAdminVideoRequiredOverlay'); if(oldPanel) oldPanel.remove();
+      const panel=document.createElement('div'); panel.id='dmAdminVideoRequiredOverlay';
+      panel.style.cssText='position:absolute;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(7,11,25,.92);';
+      panel.innerHTML=`<div style="width:min(420px,100%);background:#fff;border-radius:24px;padding:22px;color:#24170f;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.35)"><div style="font-size:42px;margin-bottom:8px">🎬</div><h3 style="margin:0 0 8px;font-size:20px">Aucune vidéo disponible</h3><p style="margin:0 0 18px;color:#6d6259;font-size:13px;line-height:1.5">Ajoute d'abord une vidéo dans la bibliothèque Admin pour pouvoir lancer cet appel vidéo.</p><button id="dmAddAdminVideoNow" class="admin-btn primary" style="width:100%;margin-bottom:9px">＋ Ajouter une vidéo</button><button id="dmCancelAdminVideoNow" class="admin-btn" style="width:100%;background:#eee;color:#33261e">Annuler</button></div>`;
+      callOverlay.style.display='flex'; callOverlay.appendChild(panel);
+      const finish=()=>{ panel.remove(); callOverlay.style.display='none'; resolve(null); };
+      document.getElementById('dmCancelAdminVideoNow').onclick=finish;
+      document.getElementById('dmAddAdminVideoNow').onclick=()=>{
+        panel.remove(); callOverlay.style.display='none';
+        const input=document.getElementById('adminVideoFileInput2');
+        if(input){ input.value=''; input.onchange=async function(){ const file=this.files&&this.files[0]; this.onchange=null; if(file){ const ok=await adminUploadVideo(file,true); showToast(ok?'Vidéo ajoutée. Relance l’appel vidéo.':'Échec de l’ajout de la vidéo', ok?'&#x2705;':'&#x26a0;&#xfe0f;'); } }; input.click(); }
+        else { navTo('screen-admin'); const b=Array.from(document.querySelectorAll('#adminTabs .admin-tab')).find(x=>(x.textContent||'').includes('Vidéos')); adminTab('videos',b); }
+        resolve(null);
+      };
       return;
     }
     const existing = document.getElementById('dmAdminVideoRequiredOverlay');
