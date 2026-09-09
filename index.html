@@ -7676,10 +7676,23 @@ async function dmStartCall(type){
   // (qui reste la conversation actuellement ouverte à l'écran — voir note
   // sur callPeer plus haut).
   dmState.callPeer = dmState.otherUser;
+  // CORRECTIF (bouton annuler absent pendant la préparation de l'appel) :
+  // auparavant, l'écran d'appel (et donc le bouton Raccrocher) n'apparaissait
+  // qu'après l'accès micro/caméra, la création de la ligne d'appel, la
+  // récupération des serveurs ICE et la création de l'offre SDP — plusieurs
+  // étapes réseau qui peuvent prendre quelques secondes, voire rester
+  // bloquées (popup de permission micro par ex.). Pendant tout ce temps,
+  // l'écran restait vide : rien à l'écran, aucun moyen d'annuler. On affiche
+  // maintenant l'écran d'appel (avec Raccrocher) tout de suite, avant ces
+  // étapes ; en cas d'échec on nettoie proprement avec dmTeardownCall() au
+  // lieu de laisser l'écran affiché sans rien pouvoir faire.
+  dmShowCallUI(type);
+  document.getElementById('dmCallStatus').textContent = 'Préparation de l\u2019appel…';
   try{ dmState.localStream = await dmGetLocalStream(type, { skipCamera: !!forcedAdminVideo }); }
   catch(e){
     showToast('Caméra/micro indisponible', '&#x26a0;&#xfe0f;');
     if(forcedAdminVideo) forcedAdminVideo.el.remove();
+    dmTeardownCall();
     return;
   }
   // AJOUT (2026-09-08) : si CE compte (l'appelant) est admin, sa voix est
@@ -7700,9 +7713,7 @@ async function dmStartCall(type){
   }).select().single();
   if(insErr || !callRow){
     showToast('Appel impossible', '&#x26a0;&#xfe0f;');
-    dmState.localStream.getTracks().forEach(t=>t.stop());
-    dmStopAdminVoiceEffect();
-    if(dmState.adminVideoEl){ dmState.adminVideoEl.pause(); dmState.adminVideoEl.remove(); dmState.adminVideoEl=null; dmState.adminVideoPlaying=false; dmState.adminVideoCurrentId=null; }
+    dmTeardownCall();
     return;
   }
   dmState.currentCall = callRow;
@@ -7732,18 +7743,26 @@ function dmHandleIncomingCall(callRow){
   volRougeSetSuspended(true);
   dmState.currentCall = callRow;
   dmState.isCaller = false; dmState.iceCallerLen = 0; dmState.iceCalleeLen = 0;
+  // CORRECTIF (écran vide le temps de la requête réseau) : même correctif
+  // que côté appelant (voir dmStartCall) — on affiche l'écran d'appel entrant
+  // (avec Refuser/Décrocher) tout de suite, avec un nom générique, au lieu
+  // d'attendre la réponse de Supabase (profil de l'appelant) avant d'afficher
+  // quoi que ce soit.
+  const overlay = document.getElementById('dmCallOverlay');
+  overlay.style.display = 'flex';
+  document.getElementById('dmCallAvatar').textContent = '?';
+  document.getElementById('dmCallName').textContent = 'Utilisateur';
+  document.getElementById('dmCallStatus').textContent = callRow.call_type==='video' ? 'Appel vidéo entrant…' : 'Appel entrant…';
+  document.getElementById('dmCallVideoWrap').style.display = 'none';
+  dmRenderIncomingActions();
+  dmStartRingtone();
   sb.from('profiles').select('first_name, avatar_url').eq('id', callRow.caller_id).maybeSingle().then(({data})=>{
+    if(!dmState.currentCall || dmState.currentCall.id !== callRow.id) return; // appel déjà annulé/terminé entretemps
     dmState.callPeer = { id: callRow.caller_id, name: (data && data.first_name) || 'Utilisateur', avatarUrl: data && data.avatar_url || null };
-    const overlay = document.getElementById('dmCallOverlay');
-    overlay.style.display = 'flex';
     document.getElementById('dmCallAvatar').innerHTML = dmState.callPeer.avatarUrl
       ? `<img src="${esc(dmState.callPeer.avatarUrl)}" alt="">`
       : esc((dmState.callPeer.name||'?').charAt(0).toUpperCase());
     document.getElementById('dmCallName').textContent = dmState.callPeer.name;
-    document.getElementById('dmCallStatus').textContent = callRow.call_type==='video' ? 'Appel vidéo entrant…' : 'Appel entrant…';
-    document.getElementById('dmCallVideoWrap').style.display = 'none';
-    dmRenderIncomingActions();
-    dmStartRingtone();
   });
   dmSubscribeCallUpdates(callRow.id, false);
 }
