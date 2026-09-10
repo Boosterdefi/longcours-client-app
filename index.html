@@ -7369,11 +7369,20 @@ async function dmLoadMessages(){
   dmState.lastRenderedSenderId = null;
   dmState.lastRenderedDayKey = null;
   dmState.msgEls = {};
-  const { data, error } = await sb.from('dm_messages').select('*')
-    .eq('conversation_id', dmState.convId).order('created_at', { ascending:true }).limit(300);
-  if(error) return;
-  (data||[]).forEach(m=>dmAppendMessage(m, false));
-  box.scrollTop = box.scrollHeight;
+  // CORRECTIF (2026-09-10) : cette requête (déclenchée à CHAQUE ouverture de
+  // conversation, donc bien plus souvent que les appels) n'était pas
+  // protégée — un réseau instable au moment précis de l'ouverture du fil
+  // provoquait le même "Failed to fetch" brut via l'alerte globale.
+  try{
+    const { data, error } = await sb.from('dm_messages').select('*')
+      .eq('conversation_id', dmState.convId).order('created_at', { ascending:true }).limit(300);
+    if(error) throw error;
+    (data||[]).forEach(m=>dmAppendMessage(m, false));
+    box.scrollTop = box.scrollHeight;
+  }catch(e){
+    console.error('dmLoadMessages', e);
+    showToast('Messages indisponibles, vérifie ta connexion', '&#x26a0;&#xfe0f;');
+  }
 }
 function dmDayKey(d){ return d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate(); }
 function dmDaySeparatorLabel(d){
@@ -7493,10 +7502,15 @@ async function dmSendText(){
   const body = input.value.trim();
   if(!body || !dmState.convId) return;
   input.value = '';
-  const { error } = await sb.from('dm_messages').insert({
-    conversation_id: dmState.convId, sender_id: sbUser.id, receiver_id: dmState.otherUser.id, type:'text', body
-  });
-  if(error){ showToast('Message non envoyé', '&#x26a0;&#xfe0f;'); input.value = body; }
+  try{
+    const { error } = await sb.from('dm_messages').insert({
+      conversation_id: dmState.convId, sender_id: sbUser.id, receiver_id: dmState.otherUser.id, type:'text', body
+    });
+    if(error) throw error;
+  }catch(e){
+    console.error('dmSendText', e);
+    showToast('Message non envoyé', '&#x26a0;&#xfe0f;'); input.value = body;
+  }
 }
 
 /* ---- Images & fichiers (2026-09-07) ----
@@ -7527,22 +7541,26 @@ async function dmUploadAndSendMedia(file){
   const isImage = file.type.startsWith('image/');
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
   const path = `${sbUser.id}/${Date.now()}_${safeName}`;
-  const { error: upErr } = await sb.storage.from('dm-media').upload(path, file, { contentType: file.type || 'application/octet-stream' });
-  if(upErr){
-    tempWrap.remove();
+  // CORRECTIF (2026-09-10) : upload + insertion non protégés — un réseau
+  // instable pendant l'envoi remontait comme "Failed to fetch" brut.
+  try{
+    const { error: upErr } = await sb.storage.from('dm-media').upload(path, file, { contentType: file.type || 'application/octet-stream' });
+    if(upErr) throw upErr;
+    const { data: pub } = sb.storage.from('dm-media').getPublicUrl(path);
+    const { error: insErr } = await sb.from('dm_messages').insert({
+      conversation_id: dmState.convId, sender_id: sbUser.id, receiver_id: dmState.otherUser.id,
+      type: isImage ? 'image' : 'file',
+      media_url: pub.publicUrl, media_name: file.name, media_mime: file.type || null, media_size: file.size
+    });
+    if(insErr) throw insErr;
+    // Le message définitif arrive via Realtime (INSERT sur dm_messages) et sera
+    // rendu par dmAppendMessage — pas besoin de le dessiner nous-mêmes ici.
+  }catch(e){
+    console.error('dmUploadAndSendMedia', e);
     showToast('Envoi échoué, réessaie', '&#x26a0;&#xfe0f;');
-    return;
+  }finally{
+    tempWrap.remove();
   }
-  const { data: pub } = sb.storage.from('dm-media').getPublicUrl(path);
-  const { error: insErr } = await sb.from('dm_messages').insert({
-    conversation_id: dmState.convId, sender_id: sbUser.id, receiver_id: dmState.otherUser.id,
-    type: isImage ? 'image' : 'file',
-    media_url: pub.publicUrl, media_name: file.name, media_mime: file.type || null, media_size: file.size
-  });
-  tempWrap.remove();
-  if(insErr){ showToast('Envoi échoué, réessaie', '&#x26a0;&#xfe0f;'); return; }
-  // Le message définitif arrive via Realtime (INSERT sur dm_messages) et sera
-  // rendu par dmAppendMessage — pas besoin de le dessiner nous-mêmes ici.
 }
 
 /* ---- Messages vocaux ---- */
@@ -7597,13 +7615,21 @@ async function dmStopRecording(send){
     if(!send || duration < 1) return;
     const blob = new Blob(dmState.chunks, { type:'audio/webm' });
     const path = `${sbUser.id}/${Date.now()}.webm`;
-    const { error: upErr } = await sb.storage.from('dm-voice').upload(path, blob, { contentType:'audio/webm' });
-    if(upErr){ showToast('Envoi du vocal échoué', '&#x26a0;&#xfe0f;'); return; }
-    const { data: pub } = sb.storage.from('dm-voice').getPublicUrl(path);
-    await sb.from('dm_messages').insert({
-      conversation_id: dmState.convId, sender_id: sbUser.id, receiver_id: dmState.otherUser.id,
-      type:'voice', audio_url: pub.publicUrl, audio_duration: duration
-    });
+    // CORRECTIF (2026-09-10) : upload + insertion non protégés — même souci
+    // "Failed to fetch" brut en cas de réseau instable pendant l'envoi.
+    try{
+      const { error: upErr } = await sb.storage.from('dm-voice').upload(path, blob, { contentType:'audio/webm' });
+      if(upErr) throw upErr;
+      const { data: pub } = sb.storage.from('dm-voice').getPublicUrl(path);
+      const { error: insErr } = await sb.from('dm_messages').insert({
+        conversation_id: dmState.convId, sender_id: sbUser.id, receiver_id: dmState.otherUser.id,
+        type:'voice', audio_url: pub.publicUrl, audio_duration: duration
+      });
+      if(insErr) throw insErr;
+    }catch(e){
+      console.error('dmStopRecording send', e);
+      showToast('Envoi du vocal échoué', '&#x26a0;&#xfe0f;');
+    }
   };
   mr.stop();
 }
