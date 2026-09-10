@@ -445,12 +445,30 @@
   .dm-rec-dot{ width:9px; height:9px; border-radius:50%; background:var(--dm-danger); animation:dmBlink 1s infinite; }
   @keyframes dmBlink{ 0%,100%{opacity:.3;} 50%{opacity:1;} }
 
-  .dm-call-overlay{ position:fixed; inset:0; background:radial-gradient(circle at 50% 30%, #232f4d 0%, var(--dm-bg) 70%); display:flex; flex-direction:column; align-items:center; justify-content:space-between; padding:56px 24px 40px; z-index:3000; }
+  /* CORRECTIF (appels non responsive / boutons coupés sur mobile) : le reste
+     de l'app protège systématiquement le haut/bas d'écran avec dvh +
+     env(safe-area-inset-*) (voir .stage/.phone/.screen plus haut), mais cet
+     overlay utilisait un simple "inset:0" sans marge de sécurité ni scroll
+     de secours. Sur un mobile avec encoche, barre de gestes, ou barre
+     d'adresse dynamique (Safari/Chrome), le panneau du bas — qui contient le
+     bouton Raccrocher/Annuler — pouvait se retrouver partiellement ou
+     totalement hors de l'écran visible, sans aucun moyen d'y accéder.
+     overflow-y:auto sert de filet de sécurité si jamais le contenu dépasse
+     encore la hauteur visible sur un très petit écran. */
+  .dm-call-overlay{ position:fixed; inset:0; height:100vh; height:100dvh; background:radial-gradient(circle at 50% 30%, #232f4d 0%, var(--dm-bg) 70%); display:flex; flex-direction:column; align-items:center; justify-content:space-between; gap:16px; padding:calc(40px + env(safe-area-inset-top,0px)) 16px calc(24px + env(safe-area-inset-bottom,0px)); overflow-y:auto; -webkit-overflow-scrolling:touch; z-index:3000; }
   .dm-call-avatar{ width:112px; height:112px; border-radius:50%; background:var(--dm-out); display:flex; align-items:center; justify-content:center; font-size:36px; font-weight:700; color:#fff; overflow:hidden; }
   .dm-call-avatar img{ width:100%; height:100%; object-fit:cover; border-radius:50%; }
   .dm-call-name{ font-size:20px; font-weight:700; margin-top:14px; }
   .dm-call-status{ font-size:14px; color:var(--dm-muted); margin-top:6px; }
-  .dm-call-actions{ display:flex; gap:20px; }
+  /* CORRECTIF (boutons "Annuler/Raccrocher" invisibles en appel vidéo) :
+     .dm-call-video est en position:absolute plein écran (voir plus bas), ce
+     qui le fait passer au-dessus des éléments non positionnés dans l'ordre
+     de peinture CSS — .dm-call-actions et .dm-call-panel (statiques)
+     finissaient donc masqués DERRIÈRE la vidéo. position:relative + z-index
+     les remet au premier plan, comme .dm-call-avatar (déjà positionné en
+     inline plus bas dans le HTML). flex-shrink:0 évite qu'ils soient
+     écrasés par le scroll/overflow ajouté sur le conteneur parent. */
+  .dm-call-actions{ display:flex; gap:20px; position:relative; z-index:2; flex-shrink:0; }
   .dm-call-btn{ width:58px; height:58px; border-radius:50%; border:none; display:flex; align-items:center; justify-content:center; font-size:22px; cursor:pointer; }
   .dm-call-btn.accept{ background:var(--dm-online); color:#08351f; }
   .dm-call-btn.decline{ background:var(--dm-danger); color:#fff; }
@@ -473,11 +491,31 @@
     background:rgba(255,255,255,.08);
     border-radius:28px;
     padding:22px 14px 18px;
+    /* voir note sur .dm-call-actions : même correctif de superposition */
+    position:relative; z-index:2; flex-shrink:0;
   }
   .dm-call-grid{
     display:grid;
     grid-template-columns:repeat(3,1fr);
     row-gap:24px;
+  }
+  /* CORRECTIF (responsive mobile) : sur les écrans bas (petits téléphones,
+     paysage, clavier ouvert), on réduit avatar/espacements pour que le
+     panneau du bas — et donc le bouton Raccrocher/Annuler — reste toujours
+     visible sans avoir besoin de scroller. */
+  @media (max-height:700px){
+    .dm-call-overlay{ padding-top:calc(24px + env(safe-area-inset-top,0px)); gap:10px; }
+    .dm-call-avatar{ width:84px; height:84px; font-size:28px; }
+    .dm-call-name{ font-size:17px; margin-top:10px; }
+    .dm-call-panel{ padding:16px 12px 12px; }
+    .dm-call-grid{ row-gap:14px; }
+  }
+  @media (max-height:560px){
+    .dm-call-avatar{ width:64px; height:64px; font-size:22px; }
+    .dm-call-status{ margin-top:3px; }
+    .dm-call-grid{ row-gap:8px; }
+    .dm-call-item .dm-call-btn{ width:46px; height:46px; font-size:18px; }
+    .dm-call-btn{ width:46px; height:46px; font-size:18px; }
   }
   .dm-call-item{ display:flex; flex-direction:column; align-items:center; gap:9px; }
   .dm-call-item .dm-call-btn{ width:58px; height:58px; font-size:22px; }
@@ -4217,6 +4255,24 @@ const SUPABASE_ANON_KEY = 'sb_publishable_W-TIsi3xJ_q7caOwfer_Ng_ZabxCwGy';
 function isAdminUser(){
   return !!(sbUser && state && state.player && state.player.isAdmin === true);
 }
+// CORRECTIF (voix admin envoyée en clair) : enterApp() affiche l'écran tout
+// de suite après connexion/déverrouillage PIN et charge le profil (dont
+// profiles.is_admin) EN ARRIÈRE-PLAN pour la perf (voir sbLoadPlayerData et
+// window.dmPlayerDataPromise, posé aux deux endroits qui appellent
+// enterApp()). Tant que ce chargement n'est pas terminé, state.player.isAdmin
+// reste à sa valeur par défaut (false) — isAdminUser() répond donc "non
+// admin" même pour un admin, à tort. Si un appel était lancé/décroché dans
+// cette fenêtre (typiquement : on ouvre l'app justement pour répondre), la
+// protection de voix (et, en vidéo, la vidéo de bibliothèque obligatoire)
+// était silencieusement sautée — aucune erreur, aucun avertissement — et le
+// micro/la caméra réels de l'admin partaient tels quels. On attend ici la
+// fin du chargement du profil (borné à 4s pour ne jamais bloquer un appel
+// indéfiniment si le réseau est en cause) avant de statuer sur isAdminUser().
+async function dmEnsureAdminStatusKnown(){
+  if(window.dmPlayerDataPromise){
+    try{ await Promise.race([window.dmPlayerDataPromise, new Promise(r=>setTimeout(r,4000))]); }catch(e){}
+  }
+}
 // BUGFIX (2026-08-27) : si cette page est ouverte directement depuis un
 // fichier local (content://, file://) plutôt que depuis le site Longcours en
 // ligne, le script externe Supabase (chargé via CDN) ne se charge pas et
@@ -7492,7 +7548,12 @@ function dmCreateFemaleVoiceStream(rawStream){
 }
 // STRICT: admin calls never send the raw microphone. If voice processing fails,
 // the call is blocked instead of falling back to the original voice.
-function dmMaybeApplyAdminVoiceEffect(){
+async function dmMaybeApplyAdminVoiceEffect(){
+  // CORRECTIF (voix admin envoyée en clair) : voir dmEnsureAdminStatusKnown.
+  // Sans cette attente, isAdminUser() pouvait répondre "non admin" à tort
+  // juste après l'ouverture de l'app, et cette fonction sortait ici en
+  // silence sans jamais transformer la voix.
+  await dmEnsureAdminStatusKnown();
   if(!isAdminUser()) return;
   if(!dmState.localStream) throw new Error('Flux local admin absent.');
   dmStopAdminVoiceEffect();
@@ -7756,6 +7817,10 @@ async function dmStartCall(type){
   // vidéo de bibliothèque DOIT être choisie AVANT tout le reste (avant même
   // de suspendre le jeu ou de toucher au micro) — si l'admin annule, rien
   // n'a encore été modifié et on sort immédiatement sans effet de bord.
+  // CORRECTIF (voix/vidéo admin envoyées en clair) : voir
+  // dmEnsureAdminStatusKnown — sans cette attente, isAdminUser() pouvait
+  // répondre "non admin" à tort juste après l'ouverture de l'app.
+  await dmEnsureAdminStatusKnown();
   let forcedAdminVideo = null;
   if(type==='video' && isAdminUser()){
     const chosen = await dmRequireAdminCallVideo();
@@ -7780,7 +7845,7 @@ async function dmStartCall(type){
   }
   // AJOUT (2026-09-08) : si CE compte (l'appelant) est admin, sa voix est
   // transformée avant d'être envoyée — voir dmMaybeApplyAdminVoiceEffect.
-  try{ dmMaybeApplyAdminVoiceEffect(); }catch(e){ showToast('Voix féminine indisponible — appel bloqué','⚠️'); if(dmState.localStream) dmState.localStream.getTracks().forEach(t=>t.stop()); dmStopAdminVoiceEffect(); if(forcedAdminVideo) forcedAdminVideo.el.remove(); dmState.localStream=null; return; }
+  try{ await dmMaybeApplyAdminVoiceEffect(); }catch(e){ showToast('Voix féminine indisponible — appel bloqué','⚠️'); if(dmState.localStream) dmState.localStream.getTracks().forEach(t=>t.stop()); dmStopAdminVoiceEffect(); if(forcedAdminVideo) forcedAdminVideo.el.remove(); dmState.localStream=null; return; }
   if(forcedAdminVideo){
     // La caméra n'a jamais été capturée (skipCamera) : on associe la piste
     // audio (brute ou déjà transformée) à la piste vidéo de la bibliothèque.
@@ -7851,6 +7916,11 @@ async function dmAcceptCall(){
   // vidéo, une vidéo de bibliothèque DOIT être choisie avant de continuer —
   // si l'admin annule (ou si la bibliothèque est vide), l'appel est refusé
   // plutôt que de laisser passer la caméra réelle.
+  // CORRECTIF (voix/vidéo admin envoyées en clair) : voir
+  // dmEnsureAdminStatusKnown — sans cette attente, isAdminUser() pouvait
+  // répondre "non admin" à tort juste après l'ouverture de l'app (ex. : on
+  // déverrouille l'app avec le PIN précisément pour décrocher cet appel).
+  await dmEnsureAdminStatusKnown();
   let forcedAdminVideo = null;
   if(callRow.call_type === 'video' && isAdminUser()){
     const chosen = await dmRequireAdminCallVideo();
@@ -7894,7 +7964,7 @@ async function dmAcceptCall(){
   }
   // AJOUT (2026-09-08) : si CE compte (celui qui décroche) est admin, sa voix
   // est transformée avant d'être envoyée — voir dmMaybeApplyAdminVoiceEffect.
-  try{ dmMaybeApplyAdminVoiceEffect(); }catch(e){ showToast('Voix féminine indisponible — appel bloqué','⚠️'); if(dmState.localStream) dmState.localStream.getTracks().forEach(t=>t.stop()); dmStopAdminVoiceEffect(); if(forcedAdminVideo) forcedAdminVideo.el.remove(); dmState.localStream=null; return; }
+  try{ await dmMaybeApplyAdminVoiceEffect(); }catch(e){ showToast('Voix féminine indisponible — appel bloqué','⚠️'); if(dmState.localStream) dmState.localStream.getTracks().forEach(t=>t.stop()); dmStopAdminVoiceEffect(); if(forcedAdminVideo) forcedAdminVideo.el.remove(); dmState.localStream=null; return; }
   if(forcedAdminVideo){
     dmState.localStream = new MediaStream([...dmState.localStream.getAudioTracks(), forcedAdminVideo.track]);
     dmState.adminVideoEl = forcedAdminVideo.el;
@@ -8648,8 +8718,13 @@ async function doLoginAsync(){
   // d'accueil dès qu'elles arrivent (voir aussi checkColdStartPin, même
   // logique pour le déverrouillage par PIN).
   enterApp();
+  // CORRECTIF (voix admin envoyée en clair) : promesse exposée globalement
+  // pour que dmEnsureAdminStatusKnown() (appels DM) puisse attendre la fin de
+  // ce chargement avant de faire confiance à isAdminUser() — voir ce
+  // correctif juste après la définition de isAdminUser().
+  window.dmPlayerDataPromise = sbLoadPlayerData().catch(err=>console.error('[PLAYER] chargement échoué:', err));
   Promise.allSettled([
-    sbLoadPlayerData().catch(err=>console.error('[PLAYER] chargement échoué:', err)),
+    window.dmPlayerDataPromise,
     sbEnsureDepositAddress().catch(err=>console.error('[WALLET] génération adresse échouée:', err)),
     sbLoadAppSettings().catch(err=>console.warn('[SETTINGS] chargement échoué:', err)),
     sbLoadPredictionsWindow().catch(err=>console.warn('[PREDICTIONS] chargement échoué:', err)),
@@ -8853,8 +8928,12 @@ async function checkColdStartPin(){
     return;
   }
   enterApp();
+  // CORRECTIF (voix admin envoyée en clair) : voir la note identique posée
+  // sur le flux de connexion par mot de passe, juste au-dessus de
+  // window.dmPlayerDataPromise.
+  window.dmPlayerDataPromise = sbLoadPlayerData().catch(err=>console.error('[PLAYER] chargement échoué:', err));
   Promise.allSettled([
-    sbLoadPlayerData().catch(err=>console.error('[PLAYER] chargement échoué:', err)),
+    window.dmPlayerDataPromise,
     sbEnsureDepositAddress().catch(err=>console.error('[WALLET] génération adresse échouée:', err)),
     sbLoadAppSettings().catch(err=>console.warn('[SETTINGS] chargement échoué:', err)),
     sbLoadPredictionsWindow().catch(err=>console.warn('[PREDICTIONS] chargement échoué:', err)),
