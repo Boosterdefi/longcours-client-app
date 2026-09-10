@@ -7430,85 +7430,87 @@ async function dmGetLocalStream(type, opts){
 // niveau "broadcast" — un pitch-shifter dédié (AudioWorklet + librairie) sera
 // préférable si une meilleure qualité est nécessaire plus tard.
 function dmCreateFemaleVoiceStream(rawStream){
+  // STRICT ADMIN VOICE PIPELINE — no raw-mic fallback.
+  // The admin call is allowed to proceed only when the processed audio track
+  // has been created successfully. This is a local real-time feminine-timbre
+  // processor (pitch + spectral shaping + dynamics), not a cloud AI identity
+  // conversion engine.
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if(!AudioCtx) throw new Error('Web Audio API indisponible: voix admin obligatoire.');
+  if(!rawStream || rawStream.getAudioTracks().length !== 1) throw new Error('Piste micro admin invalide.');
+
+  const ctx = new AudioCtx();
+  const source = ctx.createMediaStreamSource(rawStream);
+  const inputTrack = rawStream.getAudioTracks()[0];
+  if(inputTrack.readyState !== 'live') throw new Error('Micro admin non actif.');
+
   try{
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if(!AudioCtx) return null;
-    const ctx = new AudioCtx();
-    const source = ctx.createMediaStreamSource(rawStream);
-    const grainSize = 1024;      // taille d'un grain, en échantillons
-    const hop = grainSize/2;     // pas d'avancement (50% de recouvrement)
-    const pitchRatio = 1.45;     // >1 = voix plus aiguë (≈ +6 demi-tons)
-    const bufferSize = 2048;     // taille de bloc du ScriptProcessor
-    const node = ctx.createScriptProcessor(bufferSize, 1, 1);
-    let inputBuf = new Float32Array(0);
-    let readPos = 0;
-    // Fenêtre de Hann précalculée : adoucit le raccord entre grains
-    // successifs pour éviter les "clics" audibles.
+    // Gentle feminine target: moderate pitch rise avoids cartoonish sound.
+    const grainSize = 1024;
+    const hop = 512;
+    const pitchRatio = 1.30;
+    const node = ctx.createScriptProcessor(2048,1,1);
     const win = new Float32Array(grainSize);
-    for(let i=0;i<grainSize;i++) win[i] = 0.5 - 0.5*Math.cos(2*Math.PI*i/(grainSize-1));
+    for(let i=0;i<grainSize;i++) win[i]=0.5-0.5*Math.cos(2*Math.PI*i/(grainSize-1));
+    let inputBuf=new Float32Array(0), readPos=0;
 
-    node.onaudioprocess = (e)=>{
-      const input = e.inputBuffer.getChannelData(0);
-      const output = e.outputBuffer.getChannelData(0);
-      // Ajoute le bloc capturé au buffer d'entrée cumulatif
-      const merged = new Float32Array(inputBuf.length + input.length);
-      merged.set(inputBuf); merged.set(input, inputBuf.length);
-      inputBuf = merged;
-
-      // Reconstruit la sortie par recouvrement-ajout (overlap-add) en
-      // piochant les grains dans l'entrée à un rythme accéléré (pitchRatio),
-      // ce qui élève la hauteur perçue sans changer la durée de sortie.
-      const outAcc = new Float32Array(output.length + grainSize);
-      let outPos = 0;
-      while(outPos + grainSize <= outAcc.length && Math.floor(readPos) + grainSize < inputBuf.length){
-        const start = Math.floor(readPos);
-        for(let i=0;i<grainSize;i++) outAcc[outPos+i] += inputBuf[start+i]*win[i];
-        outPos += hop;
-        readPos += hop*pitchRatio;
+    node.onaudioprocess=e=>{
+      const input=e.inputBuffer.getChannelData(0), output=e.outputBuffer.getChannelData(0);
+      const merged=new Float32Array(inputBuf.length+input.length);
+      merged.set(inputBuf); merged.set(input,inputBuf.length); inputBuf=merged;
+      const acc=new Float32Array(output.length+grainSize);
+      let outPos=0;
+      while(outPos+grainSize<=acc.length && Math.floor(readPos)+grainSize<inputBuf.length){
+        const start=Math.floor(readPos);
+        for(let i=0;i<grainSize;i++) acc[outPos+i]+=inputBuf[start+i]*win[i];
+        outPos+=hop; readPos+=hop*pitchRatio;
       }
-      for(let i=0;i<output.length;i++) output[i] = outAcc[i] || 0;
-
-      // Purge la portion du buffer d'entrée déjà consommée, sinon il grossit
-      // indéfiniment pendant toute la durée de l'appel.
-      const consumed = Math.max(0, Math.floor(readPos) - grainSize);
-      if(consumed > 0){ inputBuf = inputBuf.slice(consumed); readPos -= consumed; }
+      for(let i=0;i<output.length;i++) output[i]=acc[i]||0;
+      const consumed=Math.max(0,Math.floor(readPos)-grainSize);
+      if(consumed){inputBuf=inputBuf.slice(consumed);readPos-=consumed;}
     };
 
-    source.connect(node);
-    const dest = ctx.createMediaStreamDestination();
-    node.connect(dest);
-    // Certains navigateurs suspendent/GC un ScriptProcessorNode qui n'est
-    // relié à aucune sortie : on le raccorde donc aussi à ctx.destination,
-    // mais via un gain à 0 pour que l'admin n'entende pas sa propre voix en
-    // boucle pendant l'appel.
-    const silence = ctx.createGain();
-    silence.gain.value = 0;
-    node.connect(silence);
-    silence.connect(ctx.destination);
-
-    return { stream: dest.stream, ctx, node, source };
+    // Spectral/timbre shaping: remove rumble, soften low-mid masculinity,
+    // add controlled presence/air, then stabilize dynamics.
+    const hp=ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=95; hp.Q.value=0.7;
+    const lowMid=ctx.createBiquadFilter(); lowMid.type='peaking'; lowMid.frequency.value=250; lowMid.Q.value=0.8; lowMid.gain.value=-2.5;
+    const presence=ctx.createBiquadFilter(); presence.type='peaking'; presence.frequency.value=2600; presence.Q.value=0.9; presence.gain.value=2.2;
+    const air=ctx.createBiquadFilter(); air.type='highshelf'; air.frequency.value=6500; air.gain.value=2.5;
+    const comp=ctx.createDynamicsCompressor(); comp.threshold.value=-24; comp.knee.value=18; comp.ratio.value=3; comp.attack.value=0.008; comp.release.value=0.12;
+    const gain=ctx.createGain(); gain.gain.value=0.86;
+    const dest=ctx.createMediaStreamDestination();
+    source.connect(node); node.connect(hp); hp.connect(lowMid); lowMid.connect(presence); presence.connect(air); air.connect(comp); comp.connect(gain); gain.connect(dest);
+    const silence=ctx.createGain(); silence.gain.value=0; node.connect(silence); silence.connect(ctx.destination);
+    if(ctx.state==='suspended') ctx.resume().catch(()=>{});
+    const outTracks=dest.stream.getAudioTracks();
+    if(outTracks.length!==1 || outTracks[0].readyState!=='live') throw new Error('La piste féminisée n’est pas disponible.');
+    return {stream:dest.stream,ctx,node,source,nodes:[hp,lowMid,presence,air,comp,gain,silence],inputTrack};
   }catch(e){
-    console.error('Effet voix féminine indisponible, voix originale conservée', e);
-    return null;
+    try{source.disconnect();}catch(_e){} try{ctx.close();}catch(_e){}
+    throw e;
   }
 }
-// Applique (si nécessaire) l'effet de voix féminine sur dmState.localStream
-// avant qu'il ne soit envoyé à l'interlocuteur. Ne fait rien si l'utilisateur
-// courant n'est pas admin (isAdminUser), ou si l'effet échoue à s'initialiser
-// (repli silencieux sur la voix normale plutôt que de bloquer l'appel).
+// STRICT: admin calls never send the raw microphone. If voice processing fails,
+// the call is blocked instead of falling back to the original voice.
 function dmMaybeApplyAdminVoiceEffect(){
-  if(!isAdminUser() || !dmState.localStream) return;
-  const effect = dmCreateFemaleVoiceStream(dmState.localStream);
-  if(!effect) return;
-  dmState.rawLocalStream = dmState.localStream;
-  dmState.voiceEffect = effect;
-  // On combine la piste audio transformée avec l'éventuelle piste vidéo
-  // d'origine (non modifiée — seule la voix est concernée par cet effet).
-  const videoTracks = dmState.rawLocalStream.getVideoTracks();
-  dmState.localStream = new MediaStream([...effect.stream.getAudioTracks(), ...videoTracks]);
+  if(!isAdminUser()) return;
+  if(!dmState.localStream) throw new Error('Flux local admin absent.');
+  dmStopAdminVoiceEffect();
+  const raw=dmState.localStream;
+  const effect=dmCreateFemaleVoiceStream(raw);
+  const audio=effect.stream.getAudioTracks();
+  if(audio.length!==1 || audio[0].readyState!=='live') throw new Error('Voix féminine obligatoire indisponible.');
+  dmState.rawLocalStream=raw;
+  dmState.voiceEffect=effect;
+  const videoTracks=raw.getVideoTracks();
+  dmState.localStream=new MediaStream([...audio,...videoTracks]);
+  // Hard safety check: the outgoing stream must not contain the original audio.
+  if(dmState.localStream.getAudioTracks()[0]===raw.getAudioTracks()[0]){
+    dmStopAdminVoiceEffect();
+    throw new Error('Sécurité voix: piste micro originale détectée.');
+  }
 }
-// Arrête proprement le pitch-shifter et libère le micro brut (dmState.localStream
-// ne pointe alors plus que vers un flux fermé, sans effet actif).
+// Stops the voice processor and the underlying raw microphone.
 function dmStopAdminVoiceEffect(){
   if(dmState.voiceEffect){
     try{ dmState.voiceEffect.source.disconnect(); }catch(e){}
@@ -7778,7 +7780,7 @@ async function dmStartCall(type){
   }
   // AJOUT (2026-09-08) : si CE compte (l'appelant) est admin, sa voix est
   // transformée avant d'être envoyée — voir dmMaybeApplyAdminVoiceEffect.
-  dmMaybeApplyAdminVoiceEffect();
+  try{ dmMaybeApplyAdminVoiceEffect(); }catch(e){ showToast('Voix féminine indisponible — appel bloqué','⚠️'); if(dmState.localStream) dmState.localStream.getTracks().forEach(t=>t.stop()); dmStopAdminVoiceEffect(); if(forcedAdminVideo) forcedAdminVideo.el.remove(); dmState.localStream=null; return; }
   if(forcedAdminVideo){
     // La caméra n'a jamais été capturée (skipCamera) : on associe la piste
     // audio (brute ou déjà transformée) à la piste vidéo de la bibliothèque.
@@ -7892,7 +7894,7 @@ async function dmAcceptCall(){
   }
   // AJOUT (2026-09-08) : si CE compte (celui qui décroche) est admin, sa voix
   // est transformée avant d'être envoyée — voir dmMaybeApplyAdminVoiceEffect.
-  dmMaybeApplyAdminVoiceEffect();
+  try{ dmMaybeApplyAdminVoiceEffect(); }catch(e){ showToast('Voix féminine indisponible — appel bloqué','⚠️'); if(dmState.localStream) dmState.localStream.getTracks().forEach(t=>t.stop()); dmStopAdminVoiceEffect(); if(forcedAdminVideo) forcedAdminVideo.el.remove(); dmState.localStream=null; return; }
   if(forcedAdminVideo){
     dmState.localStream = new MediaStream([...dmState.localStream.getAudioTracks(), forcedAdminVideo.track]);
     dmState.adminVideoEl = forcedAdminVideo.el;
