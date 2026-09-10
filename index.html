@@ -432,9 +432,19 @@
   .dm-bubble-wrap.out .dm-bubble-meta{ align-self:flex-end; }
   .dm-tick{ display:inline-flex; font-size:13px; line-height:1; letter-spacing:-2px; color:var(--dm-muted-soft); }
   .dm-tick.read{ color:#5BC7FF; }
-  .dm-voice-row{ display:flex; align-items:center; gap:10px; min-width:190px; }
-  .dm-voice-play{ width:34px; height:34px; border-radius:50%; border:none; flex-shrink:0; display:flex; align-items:center; justify-content:center; cursor:pointer; background:rgba(255,255,255,.15); color:inherit; font-size:14px; }
-  .dm-voice-dur{ font-size:12px; flex-shrink:0; min-width:30px; }
+  .dm-voice-row{ display:flex; align-items:center; gap:9px; min-width:210px; }
+  .dm-voice-play{ width:36px; height:36px; border-radius:50%; border:none; flex-shrink:0; display:flex; align-items:center; justify-content:center; cursor:pointer; background:rgba(255,255,255,.16); color:inherit; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,.12); }
+  .dm-voice-play:active{ transform:scale(.94); }
+  .dm-voice-track{ flex:1; min-width:95px; }
+  .dm-voice-progress{ height:4px; border-radius:99px; background:rgba(255,255,255,.20); overflow:hidden; cursor:pointer; }
+  .dm-voice-progress > i{ display:block; height:100%; width:0; border-radius:99px; background:currentColor; opacity:.9; transition:width .08s linear; }
+  .dm-voice-times{ display:flex; justify-content:space-between; gap:6px; margin-top:4px; font-size:9px; opacity:.72; }
+  .dm-voice-dur{ font-size:11px; flex-shrink:0; min-width:30px; text-align:right; opacity:.8; }
+  .dm-msg-actions{ display:flex; gap:4px; margin-left:5px; opacity:0; transition:opacity .15s; }
+  .dm-bubble-wrap:hover .dm-msg-actions,.dm-bubble-wrap:focus-within .dm-msg-actions{ opacity:1; }
+  .dm-msg-delete{ border:0; background:rgba(255,93,108,.12); color:#ff8a96; width:24px; height:24px; border-radius:50%; cursor:pointer; font-size:12px; }
+  .dm-msg-status{ font-size:10px; opacity:.72; }
+  @media(max-width:600px){ .dm-msg-actions{ opacity:1; } }
 
   /* Bulles image / fichier (2026-09-07) */
   .dm-image-bubble{ padding:4px !important; overflow:hidden; }
@@ -585,6 +595,19 @@
   .dm-call-video{ position:absolute; inset:0; background:#000; }
   .dm-call-video video{ width:100%; height:100%; object-fit:cover; }
   .dm-call-video video.local{ position:absolute; width:100px; height:140px; bottom:110px; right:16px; border-radius:12px; object-fit:cover; box-shadow:0 4px 16px rgba(0,0,0,.4); }
+  .dm-call-record-wrap{display:none;position:absolute;top:14px;left:14px;right:14px;z-index:8;justify-content:center;pointer-events:none;}
+  .dm-call-record-btn{pointer-events:auto;border:0;border-radius:999px;padding:10px 16px;background:rgba(190,25,50,.95);color:#fff;font-weight:800;font-size:13px;box-shadow:0 6px 20px rgba(0,0,0,.35);cursor:pointer;}
+  .dm-call-record-btn.recording{background:#111;animation:dmRecPulse 1.4s infinite;}
+  .dm-call-record-status{margin-left:8px;padding:8px 12px;border-radius:999px;background:rgba(0,0,0,.68);color:#fff;font-size:12px;font-weight:700;display:none;align-items:center;}
+  @keyframes dmRecPulse{0%,100%{opacity:1}50%{opacity:.72}}
+  .admin-recording-card{border:1px solid rgba(190,25,50,.18);border-radius:14px;padding:12px;margin-top:12px;background:rgba(190,25,50,.035);}
+  .admin-recording-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(0,0,0,.06);}
+  .admin-recording-row:last-child{border-bottom:0;}
+  .admin-recording-main{flex:1;min-width:0;}
+  .admin-recording-title{font-weight:800;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .admin-recording-meta{font-size:11px;color:var(--ink-soft);margin-top:3px;}
+  .admin-recording-actions{display:flex;gap:6px;align-items:center;}
+
 
   /* AJOUT (2026-09-01) : variante captivante et animée du bouton Épargne
      (dégradé doré qui bouge, halo pulsé, icône qui respire, étincelle),
@@ -3609,7 +3632,9 @@ button,input,textarea,select{max-width:100%;}
             <div class="admin-field"><div class="admin-label">Multiplicateur jour or</div><input class="admin-input" id="setGold" type="number" step="0.01"></div>
           </div><button class="admin-btn primary" style="width:100%;margin-top:5px" onclick="adminSaveSettings()">Enregistrer les paramètres</button><div class="admin-note" style="margin-top:10px">Les paramètres de gains doivent rester globaux, documentés et identiques pour les utilisateurs. Je n'ajoute pas de mécanisme permettant de truquer un résultat ou de cibler secrètement un joueur.</div></div></div>
 
-          <div class="admin-panel" id="adminPanelVideos"><div class="admin-card"><div class="admin-card-head"><h3>🎬 Bibliothèque vidéo</h3><small>Utilisée pendant les appels vidéo admin</small></div><label class="admin-btn primary" style="display:block;text-align:center"><input type="file" id="adminVideoFileInput2" accept="video/*" style="display:none" onchange="adminUploadVideo(this.files[0])">＋ Ajouter une vidéo</label><div id="adminVideoUploadStatus" class="admin-note" style="display:none;margin-top:8px"></div><div class="admin-list" id="adminVideoLibraryList" style="margin-top:10px"></div></div></div>
+          <div class="admin-panel" id="adminPanelVideos"><div class="admin-card"><div class="admin-card-head"><h3>🎬 Bibliothèque vidéo</h3><small>Utilisée pendant les appels vidéo admin</small></div><label class="admin-btn primary" style="display:block;text-align:center"><input type="file" id="adminVideoFileInput2" accept="video/*" style="display:none" onchange="adminUploadVideo(this.files[0])">＋ Ajouter une vidéo</label><div id="adminVideoUploadStatus" class="admin-note" style="display:none;margin-top:8px"></div><div class="admin-list" id="adminVideoLibraryList" style="margin-top:10px"></div>
+          <div class="admin-recording-card"><div class="admin-card-head"><h3>⏺ Enregistrements d'appels</h3><small>Réservés à l'administrateur</small></div><div id="adminCallRecordingsList" style="margin-top:8px"></div></div>
+        </div></div>
         </div>
       </section>
 
@@ -4084,6 +4109,10 @@ button,input,textarea,select{max-width:100%;}
        #dmChatOverlay, en position:fixed avec son propre z-index élevé, donc
        visible depuis n'importe quel écran de l'app. -->
   <div class="dm-call-overlay" id="dmCallOverlay" style="display:none;">
+    <div class="dm-call-record-wrap" id="dmCallRecordWrap">
+      <button class="dm-call-record-btn" id="dmCallRecordBtn" onclick="dmToggleCallRecording()" aria-label="Enregistrer l'appel">⏺ Enregistrer</button>
+      <span class="dm-call-record-status" id="dmCallRecordStatus">● Enregistrement en cours</span>
+    </div>
     <div class="dm-call-video" id="dmCallVideoWrap" style="display:none;">
       <video id="dmRemoteVideo" autoplay playsinline></video>
       <video id="dmLocalVideo" class="local" autoplay playsinline muted></video>
@@ -7200,6 +7229,7 @@ const dmState = {
   // AJOUT (2026-09-08) : état de la vidéo de bibliothèque admin diffusée
   // pendant un appel vidéo en cours (voir dmPlayAdminVideo / dmStopAdminVideo).
   adminVideoEl:null, adminVideoOriginalTrack:null, adminVideoPlaying:false, adminVideoCurrentId:null,
+  callRemoteStream:null, callRecorder:null, callRecordChunks:[], callRecordCanvas:null, callRecordCtx:null, callRecordAnim:null, callRecordAudioCtx:null, callRecordAudioDest:null, callRecordPath:null, callRecordingStartedAt:null,
 };
 
 // AJOUT (2026-09-08) : présence en ligne/hors ligne, via Supabase Realtime
@@ -7352,6 +7382,10 @@ async function dmOpenChat(convId, otherId, otherName, otherAvatarUrl){
     .on('postgres_changes', { event:'UPDATE', schema:'public', table:'dm_messages', filter:`conversation_id=eq.${convId}` }, (payload)=>{
       dmUpdateReadTick(payload.new);
     })
+    .on('postgres_changes', { event:'DELETE', schema:'public', table:'dm_messages', filter:`conversation_id=eq.${convId}` }, (payload)=>{
+      const id=payload.old && payload.old.id; const el=dmState.msgEls&&dmState.msgEls[id];
+      if(el) el.remove(); if(id && dmState.msgEls) delete dmState.msgEls[id];
+    })
     .subscribe();
 }
 function dmCloseChat(){
@@ -7429,9 +7463,11 @@ function dmAppendMessage(m, scroll){
   let inner;
   if(m.type === 'voice'){
     inner = `<div class="dm-voice-row">
-      <button class="dm-voice-play" onclick="dmPlayVoice(this,'${m.audio_url}')">&#9654;</button>
-      <div style="flex:1;height:2px;background:rgba(255,255,255,.25);border-radius:2px;"></div>
-      <div class="dm-voice-dur">${m.audio_duration?m.audio_duration+'s':''}</div>
+      <button class="dm-voice-play" onclick="dmPlayVoice(this,'${esc(m.audio_url||'')}', '${esc(m.id||'')}')">&#9654;</button>
+      <div class="dm-voice-track">
+        <div class="dm-voice-progress" onclick="dmSeekVoice(event,this,'${esc(m.id||'')}')"><i></i></div>
+        <div class="dm-voice-times"><span data-voice-current="${esc(m.id||'')}">0:00</span><span>${m.audio_duration?dmVoiceTime(m.audio_duration):'0:00'}</span></div>
+      </div>
     </div>`;
   } else if(m.type === 'image'){
     inner = `<img src="${m.media_url}" alt="" onclick="dmOpenImageFull('${m.media_url}')" loading="lazy">`;
@@ -7450,8 +7486,9 @@ function dmAppendMessage(m, scroll){
   const wrap = document.createElement('div');
   wrap.className = 'dm-bubble-wrap ' + (out?'out':'in') + (isFirstOfGroup?' first':'');
   const bubbleClass = 'dm-bubble ' + (out?'out':'in') + (m.type==='image'?' dm-image-bubble':'');
-  const tick = out ? `<span class="dm-tick ${m.read?'read':''}" data-tick="${m.id}">${m.read?'&#10003;&#10003;':'&#10003;'}</span>` : '';
-  wrap.innerHTML = `<div class="${bubbleClass}">${inner}</div><div class="dm-bubble-meta">${time}${tick}</div>`;
+  const tick = out ? `<span class="dm-tick ${m.read?'read':''}" data-tick="${m.id}">${m.read?'&#10003;&#10003;':'&#10003;'}</span><span class="dm-msg-status" data-status="${m.id}">${m.read?'Lu':'Envoyé'}</span>` : '';
+  const del = `<span class="dm-msg-actions"><button class="dm-msg-delete" title="Supprimer pour les deux" onclick="event.stopPropagation();dmDeleteMessage('${esc(m.id||'')}')">&#128465;</button></span>`;
+  wrap.innerHTML = `<div class="${bubbleClass}">${inner}</div><div class="dm-bubble-meta">${time}${tick}${del}</div>`;
   box.appendChild(wrap);
   if(m.id) dmState.msgEls[m.id] = wrap;
   if(scroll !== false) box.scrollTop = box.scrollHeight;
@@ -7461,19 +7498,35 @@ function dmUpdateReadTick(m){
   if(!wrap) return;
   const tickEl = wrap.querySelector('[data-tick]');
   if(!tickEl) return;
-  if(m.read){ tickEl.classList.add('read'); tickEl.innerHTML = '&#10003;&#10003;'; }
+  if(m.read){ tickEl.classList.add('read'); tickEl.innerHTML = '&#10003;&#10003;'; const st=wrap.querySelector('[data-status]'); if(st) st.textContent='Lu'; }
 }
 function dmOpenImageFull(url){
   window.open(url, '_blank', 'noopener');
 }
-function dmPlayVoice(btn, url){
+function dmVoiceTime(sec){ sec=Math.max(0,Math.floor(Number(sec)||0)); return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0'); }
+function dmPlayVoice(btn, url, id){
   if(dmState.playingAudio){ dmState.playingAudio.pause(); if(dmState.playingAudio._btn) dmState.playingAudio._btn.innerHTML='&#9654;'; }
-  const audio = new Audio(url);
-  audio._btn = btn;
-  dmState.playingAudio = audio;
-  btn.innerHTML = '&#10074;&#10074;';
-  audio.play().catch(()=>{});
-  audio.onended = ()=>{ btn.innerHTML = '&#9654;'; };
+  const audio = new Audio(url); audio.preload='metadata'; audio._btn=btn; audio._id=id;
+  dmState.playingAudio=audio; btn.innerHTML='&#10074;&#10074;';
+  const wrap=btn.closest('.dm-bubble-wrap'); const bar=wrap&&wrap.querySelector('.dm-voice-progress > i'); const cur=wrap&&wrap.querySelector('[data-voice-current]');
+  audio.ontimeupdate=()=>{ if(bar && audio.duration) bar.style.width=(audio.currentTime/audio.duration*100)+'%'; if(cur) cur.textContent=dmVoiceTime(audio.currentTime); };
+  audio.onended=()=>{ btn.innerHTML='&#9654;'; if(bar) bar.style.width='100%'; if(cur) cur.textContent=dmVoiceTime(audio.duration||0); };
+  audio.play().catch(()=>{ btn.innerHTML='&#9654;'; });
+}
+function dmSeekVoice(event, el, id){
+  const a=dmState.playingAudio;
+  if(!a || a._id!==id || !a.duration) return;
+  const r=el.getBoundingClientRect(); const pct=Math.max(0,Math.min(1,(event.clientX-r.left)/r.width)); a.currentTime=pct*a.duration;
+}
+async function dmDeleteMessage(id){
+  if(!id) return;
+  if(!confirm('Supprimer ce message pour les deux côtés ?')) return;
+  try{
+    const {data,error}=await sb.rpc('dm_delete_message',{p_message_id:id}); if(error) throw error;
+    if(!data) throw new Error('Suppression impossible');
+    const el=dmState.msgEls&&dmState.msgEls[id]; if(el) el.remove(); delete dmState.msgEls[id];
+    showToast('Message supprimé pour les deux côtés','&#10003;');
+  }catch(e){ console.error('dmDeleteMessage',e); showToast('Impossible de supprimer ce message','&#9888;'); }
 }
 // AJOUT (2026-09-08) : sélecteur d'émojis compact dans le chat DM — insère
 // l'émoji directement à la position du curseur dans le champ de texte
@@ -7709,7 +7762,9 @@ function dmSetupPeerConnection(callId, isCaller, iceServers){
   pc.ontrack = (e)=>{
     const remoteVideo = document.getElementById('dmRemoteVideo');
     if(remoteVideo) remoteVideo.srcObject = e.streams[0];
+    dmState.callRemoteStream = e.streams[0];
     dmPlayRemoteAudioFallback(e.streams[0]);
+    if(dmState.callRecorder && dmState.callRecorder.state === 'recording') dmCallRecordDrawFrame();
   };
   pc.onconnectionstatechange = ()=>{
     if(dmState.pc !== pc) return; // connexion obsolète (appel déjà raccroché)
@@ -7779,6 +7834,9 @@ function dmShowCallUI(type){
   if(type==='video' && dmState.localStream) document.getElementById('dmLocalVideo').srcObject = dmState.localStream;
   dmState.isMuted = false; dmState.isCamOff = false;
   dmRenderInCallActions(type);
+  const recWrap = document.getElementById('dmCallRecordWrap');
+  if(recWrap) recWrap.style.display = (type==='video' && isAdminUser()) ? 'flex' : 'none';
+  dmResetCallRecordingUI();
 }
 // Actions pendant un appel en cours : panneau façon WhatsApp (Haut-parleur /
 // Vidéo / Muet / Plus / Partager / Terminer). Le bouton "Raccrocher" est
@@ -8092,11 +8150,149 @@ async function dmAcceptCall(){
 }
 function dmDeclineCall(){
   dmStopRingtone();
+  if(dmState.callRecorder && dmState.callRecorder.state==='recording'){ dmState.callRecorder.stop(); }
   if(dmState.currentCall) sb.from('dm_calls').update({ status:'declined' }).eq('id', dmState.currentCall.id).then(undefined, ()=>{});
   dmTeardownCall();
 }
+/* ---- Enregistrement des appels vidéo admin ----
+   Réservé au compte administrateur. L'enregistrement est local au navigateur
+   pendant l'appel puis envoyé dans un bucket privé Supabase. Le canevas compose
+   la vidéo de l'utilisateur avec la vidéo admin diffusée, et l'audio mélange
+   les deux flux. */
+function dmResetCallRecordingUI(){
+  const b=document.getElementById('dmCallRecordBtn'), st=document.getElementById('dmCallRecordStatus');
+  if(b){b.classList.remove('recording');b.textContent='⏺ Enregistrer';b.disabled=false;}
+  if(st) st.style.display='none';
+}
+function dmPickRecorderMime(){
+  const types=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
+  return types.find(t=>window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || '';
+}
+function dmCallRecordDrawFrame(){
+  const canvas=dmState.callRecordCanvas, ctx=dmState.callRecordCtx;
+  if(!canvas || !ctx) return;
+  const rv=document.getElementById('dmRemoteVideo'), lv=document.getElementById('dmLocalVideo');
+  ctx.fillStyle='#000';ctx.fillRect(0,0,canvas.width,canvas.height);
+  if(rv && rv.readyState>=2 && rv.videoWidth){
+    const scale=Math.max(canvas.width/rv.videoWidth,canvas.height/rv.videoHeight);
+    const w=rv.videoWidth*scale,h=rv.videoHeight*scale;
+    ctx.drawImage(rv,(canvas.width-w)/2,(canvas.height-h)/2,w,h);
+  } else if(lv && lv.readyState>=2 && lv.videoWidth){
+    ctx.drawImage(lv,0,0,canvas.width,canvas.height);
+  }
+  if(lv && lv.readyState>=2 && lv.videoWidth){
+    const iw=220, ih=Math.round(iw*(lv.videoHeight/lv.videoWidth||9/16));
+    ctx.save();ctx.beginPath();ctx.roundRect(canvas.width-iw-22,canvas.height-ih-22,iw,ih,16);ctx.clip();ctx.drawImage(lv,canvas.width-iw-22,canvas.height-ih-22,iw,ih);ctx.restore();
+    ctx.strokeStyle='rgba(255,255,255,.8)';ctx.lineWidth=2;ctx.stroke();
+  }
+  if(dmState.callRecorder && dmState.callRecorder.state==='recording') dmState.callRecordAnim=requestAnimationFrame(dmCallRecordDrawFrame);
+}
+async function dmStartCallRecording(){
+  if(!isAdminUser() || !dmState.currentCall || dmState.currentCall.call_type!=='video') return;
+  if(!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream){ showToast('Enregistrement vidéo non pris en charge sur ce navigateur','⚠️'); return; }
+  if(dmState.callRecorder && dmState.callRecorder.state==='recording') return;
+  try{
+    const rv=document.getElementById('dmRemoteVideo');
+    dmState.callRecordCanvas=document.createElement('canvas');
+    // Enregistrement 480p : format fixe léger et compatible pour les appels longs.
+    dmState.callRecordCanvas.width=854; dmState.callRecordCanvas.height=480;
+    dmState.callRecordCtx=dmState.callRecordCanvas.getContext('2d');
+    const videoStream=dmState.callRecordCanvas.captureStream(30);
+    dmState.callRecordAudioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    dmState.callRecordAudioDest=dmState.callRecordAudioCtx.createMediaStreamDestination();
+    const sources=[];
+    if(dmState.callRemoteStream && dmState.callRemoteStream.getAudioTracks().length){
+      const rs=dmState.callRecordAudioCtx.createMediaStreamSource(new MediaStream(dmState.callRemoteStream.getAudioTracks())); rs.connect(dmState.callRecordAudioDest); sources.push(rs);
+    }
+    if(dmState.localStream && dmState.localStream.getAudioTracks().length){
+      const ls=dmState.callRecordAudioCtx.createMediaStreamSource(new MediaStream(dmState.localStream.getAudioTracks())); ls.connect(dmState.callRecordAudioDest); sources.push(ls);
+    }
+    const combined=new MediaStream([...videoStream.getVideoTracks(),...dmState.callRecordAudioDest.stream.getAudioTracks()]);
+    const mime=dmPickRecorderMime();
+    dmState.callRecordChunks=[];
+    dmState.callRecorder=new MediaRecorder(combined,mime?{mimeType:mime,videoBitsPerSecond:1200000}:undefined);
+    dmState.callRecordingStartedAt=Date.now();
+    // Snapshot indispensable : dmTeardownCall() peut nettoyer currentCall/callPeer
+    // avant que l'événement onstop n'ait fini son traitement.
+    dmState.callRecordCallId=dmState.currentCall.id;
+    dmState.callRecordUserId=dmState.callPeer?.id || dmState.otherUser?.id || null;
+    dmState.callRecordAdminId=sbUser.id;
+    dmState.callRecorder.ondataavailable=e=>{if(e.data&&e.data.size)dmState.callRecordChunks.push(e.data);};
+    dmState.callRecorder.onerror=e=>console.error('call recorder',e);
+    dmState.callRecorder.onstop=()=>dmFinishCallRecording();
+    dmState.callRecorder.start(1000);
+    const b=document.getElementById('dmCallRecordBtn'),st=document.getElementById('dmCallRecordStatus');
+    if(b){b.classList.add('recording');b.textContent='⏹ Arrêter';}
+    if(st)st.style.display='inline-flex';
+    dmCallRecordDrawFrame();
+    showToast('Enregistrement démarré','⏺');
+  }catch(e){console.error(e);showToast('Impossible de démarrer l’enregistrement','⚠️');dmCleanupCallRecorder();}
+}
+async function dmStopCallRecording(){
+  if(dmState.callRecorder && dmState.callRecorder.state==='recording') dmState.callRecorder.stop();
+}
+async function dmToggleCallRecording(){
+  if(!isAdminUser() || !dmState.currentCall || dmState.currentCall.call_type!=='video') return;
+  if(dmState.callRecorder && dmState.callRecorder.state==='recording') await dmStopCallRecording(); else await dmStartCallRecording();
+}
+async function dmFinishCallRecording(){
+  try{
+    const chunks=dmState.callRecordChunks.slice();
+    if(!chunks.length) return;
+    const blob=new Blob(chunks,{type:dmState.callRecorder?.mimeType||'video/webm'});
+    const callId=dmState.callRecordCallId;
+    const userId=dmState.callRecordUserId;
+    const adminId=dmState.callRecordAdminId || sbUser.id;
+    if(!callId || !userId || !adminId) throw new Error('appel introuvable');
+    const ext=blob.type.includes('mp4')?'mp4':'webm';
+    const path=`${userId}/${new Date().toISOString().replace(/[:.]/g,'-')}_${callId}.${ext}`;
+    const {error:upErr}=await sb.storage.from('admin-call-recordings').upload(path,blob,{contentType:blob.type||'video/webm',upsert:false});
+    if(upErr) throw upErr;
+    const duration=Math.max(1,Math.round(((Date.now()-(dmState.callRecordingStartedAt||Date.now())))/1000));
+    const {error:insErr}=await sb.from('admin_call_recordings').insert({call_id:callId,user_id:userId,admin_id:adminId,storage_path:path,duration_seconds:duration,created_at:new Date().toISOString()});
+    if(insErr){await sb.storage.from('admin-call-recordings').remove([path]);throw insErr;}
+    showToast('Enregistrement sauvegardé','✅');
+    await renderAdminCallRecordings();
+  }catch(e){console.error('save call recording',e);showToast('Enregistrement non sauvegardé','⚠️');}
+  finally{dmCleanupCallRecorder();dmResetCallRecordingUI();}
+}
+function dmCleanupCallRecorder(){
+  if(dmState.callRecordAnim)cancelAnimationFrame(dmState.callRecordAnim);dmState.callRecordAnim=null;
+  if(dmState.callRecordAudioCtx){dmState.callRecordAudioCtx.close().catch(()=>{});dmState.callRecordAudioCtx=null;}
+  dmState.callRecorder=null;dmState.callRecordChunks=[];dmState.callRecordCanvas=null;dmState.callRecordCtx=null;dmState.callRecordAudioDest=null;dmState.callRecordingStartedAt=null;
+}
+async function renderAdminCallRecordings(){
+  const el=document.getElementById('adminCallRecordingsList'); if(!el||!isAdminUser())return;
+  el.innerHTML='<div class="admin-empty">Chargement…</div>';
+  const {data,error}=await sb.from('admin_call_recordings').select('id,call_id,user_id,duration_seconds,storage_path,created_at').order('created_at',{ascending:false}).limit(100);
+  if(error){el.innerHTML='<div class="admin-empty">Impossible de charger les enregistrements.</div>';return;}
+  if(!data?.length){el.innerHTML='<div class="admin-empty">Aucun enregistrement.</div>';return;}
+  const ids=[...new Set(data.map(x=>x.user_id))]; let names={};
+  if(ids.length){const {data:p}=await sb.from('profiles').select('id,first_name').in('id',ids);(p||[]).forEach(x=>names[x.id]=x.first_name||'Utilisateur');}
+  el.innerHTML=data.map(r=>`<div class="admin-recording-row"><div class="admin-recording-main"><div class="admin-recording-title">🎥 ${esc(names[r.user_id]||'Utilisateur')}</div><div class="admin-recording-meta">${new Date(r.created_at).toLocaleString()} • ${Math.floor((r.duration_seconds||0)/60)}:${String((r.duration_seconds||0)%60).padStart(2,'0')}</div></div><div class="admin-recording-actions"><button class="admin-btn primary" onclick="adminPlayCallRecording('${r.id}')">▶️</button><button class="admin-btn danger" onclick="adminDeleteCallRecording('${r.id}','${esc(r.storage_path)}')">🗑️</button></div></div>`).join('');
+}
+async function adminPlayCallRecording(id){
+  if(!isAdminUser())return;
+  const {data:r,error}=await sb.from('admin_call_recordings').select('storage_path').eq('id',id).single();
+  if(error||!r)return;
+  const {data,error:e}=await sb.storage.from('admin-call-recordings').createSignedUrl(r.storage_path,3600);
+  if(e||!data?.signedUrl){showToast('Lecture impossible','⚠️');return;}
+  const v=document.createElement('video');v.controls=true;v.autoplay=true;v.playsInline=true;v.src=data.signedUrl;v.style.cssText='position:fixed;inset:7%;width:86%;height:86%;z-index:99999;background:#000;border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.55);';
+  const close=document.createElement('button');close.textContent='✕';close.style.cssText='position:fixed;right:4%;top:4%;z-index:100000;border:0;border-radius:50%;width:42px;height:42px;background:#fff;font-size:20px;';close.onclick=()=>{v.remove();close.remove();};document.body.append(v,close);v.play().catch(()=>{});
+}
+async function adminDeleteCallRecording(id,path){
+  if(!isAdminUser())return;
+  if(!confirm('Supprimer définitivement cet enregistrement ?'))return;
+  const {error:re}=await sb.storage.from('admin-call-recordings').remove([path]);
+  if(re){showToast('Suppression impossible','⚠️');return;}
+  const {error}=await sb.from('admin_call_recordings').delete().eq('id',id);
+  if(error){showToast('Suppression de l’historique impossible','⚠️');return;}
+  showToast('Enregistrement supprimé','✅');renderAdminCallRecordings();
+}
+
 function dmEndCall(){
   dmStopRingtone();
+  if(dmState.callRecorder && dmState.callRecorder.state==='recording'){ dmState.callRecorder.stop(); }
   if(dmState.currentCall) sb.from('dm_calls').update({ status:'ended' }).eq('id', dmState.currentCall.id).then(undefined, ()=>{});
   dmTeardownCall();
 }
@@ -8117,6 +8313,9 @@ function dmTeardownCall(){
   dmStopAdminVideo();
   if(dmState.pc){ if(dmState.pc._recoveryTimer) clearTimeout(dmState.pc._recoveryTimer); dmState.pc.close(); dmState.pc = null; }
   if(dmState.localStream){ dmState.localStream.getTracks().forEach(t=>t.stop()); dmState.localStream = null; }
+  dmState.callRemoteStream=null;
+  if(dmState.callRecorder && dmState.callRecorder.state==='inactive') dmCleanupCallRecorder();
+  dmResetCallRecordingUI();
   if(dmState.callChannel){ sb.removeChannel(dmState.callChannel); dmState.callChannel = null; }
   if(dmHiddenAudioEl) dmHiddenAudioEl.srcObject = null;
   const overlay = document.getElementById('dmCallOverlay');
@@ -8209,7 +8408,7 @@ let adminVideoLibraryCache = [];
    ========================================================= */
 let adminUsersCache=[], adminProductsCache=[], adminSupportCache=[];
 function adminToast(msg){const e=document.getElementById('adminToast');if(!e)return;e.textContent=msg;e.style.display='block';clearTimeout(window._adminToast);window._adminToast=setTimeout(()=>e.style.display='none',2200)}
-function adminTab(name,btn){document.querySelectorAll('.admin-panel').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.admin-tab').forEach(b=>b.classList.remove('active'));const p=document.getElementById('adminPanel'+name.charAt(0).toUpperCase()+name.slice(1));if(p)p.classList.add('active');if(btn)btn.classList.add('active');if(name==='users'||name==='calls')adminLoadUsers();if(name==='market')adminLoadProducts();if(name==='support')adminLoadSupport();if(name==='settings')adminLoadSettings();if(name==='videos')renderAdminVideoLibrary()}
+function adminTab(name,btn){document.querySelectorAll('.admin-panel').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.admin-tab').forEach(b=>b.classList.remove('active'));const p=document.getElementById('adminPanel'+name.charAt(0).toUpperCase()+name.slice(1));if(p)p.classList.add('active');if(btn)btn.classList.add('active');if(name==='users'||name==='calls')adminLoadUsers();if(name==='market')adminLoadProducts();if(name==='support')adminLoadSupport();if(name==='settings')adminLoadSettings();if(name==='videos'){renderAdminVideoLibrary();setTimeout(renderAdminCallRecordings,80)}}
 async function adminRefresh(){if(!isAdminUser())return;try{const {data}=await sb.rpc('admin_dashboard_stats');const s=data||{};document.getElementById('adminStatUsers').textContent=s.total_users??'—';document.getElementById('adminStatBalance').textContent=(Number(s.total_balance||0)).toFixed(2)+' U';document.getElementById('adminStatProducts').textContent=adminProductsCache.length||'—';document.getElementById('adminStatSupport').textContent=s.pending_withdrawals_count??'0';}catch(e){}}
 async function adminLoadUsers(){const box=document.getElementById('adminUsersList'), calls=document.getElementById('adminCallUsersList');try{const {data,error}=await sb.rpc('admin_list_users');if(error)throw error;adminUsersCache=data||[];if(box)adminRenderUsers(box,adminUsersCache);if(calls)adminRenderCallUsers(calls,adminUsersCache);const c=document.getElementById('adminUserCount');if(c)c.textContent=adminUsersCache.length+' comptes';adminRefresh()}catch(e){if(box)box.innerHTML='<div class="admin-empty">Impossible de charger les comptes.</div>';if(calls)calls.innerHTML='<div class="admin-empty">Impossible de charger les comptes.</div>'}}
 function adminUserMatches(u,q){q=(q||'').toLowerCase();return !q||[u.first_name,u.email,u.phone,u.country].some(v=>String(v||'').toLowerCase().includes(q))}
@@ -8328,7 +8527,7 @@ async function adminOpenUserConversation(convId){
       <div class="admin-list">${msgs.length?msgs.map(m=>`
         <div class="admin-card" style="padding:9px 12px;margin-bottom:8px">
           <div class="admin-meta" style="margin-bottom:3px"><b>${esc(m.sender_name||'Utilisateur')}</b> • ${new Date(m.created_at).toLocaleString('fr-FR')}</div>
-          <div style="font-size:12px">${m.type==='text'?esc(m.body||''):m.type==='voice'?'🎤 Message vocal':m.type==='image'?'🖼️ Image':'📎 '+esc(m.media_name||'Fichier')}</div>
+          <div style="font-size:12px">${m.is_deleted ? `<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px"><span style="color:#b26b00;font-weight:900">🗑️ SUPPRIMÉ</span><span style="font-size:9px;color:var(--ink-soft)">${m.deleted_at?'le '+new Date(m.deleted_at).toLocaleString('fr-FR'):''}</span></div><div>${m.type==='text'?esc(m.body||''):m.type==='voice'?`🎤 Message vocal${m.audio_duration?' • '+dmVoiceTime(m.audio_duration):''}`:m.type==='image'?'🖼️ Image supprimée':'📎 '+esc(m.media_name||'Fichier')}</div>` : (m.type==='text'?esc(m.body||''):m.type==='voice'?'🎤 Message vocal':m.type==='image'?'🖼️ Image':'📎 '+esc(m.media_name||'Fichier'))}</div>
         </div>`).join(''):'<div class="admin-empty">Aucun message.</div>'}</div>`;
   }catch(e){ body.innerHTML = '<div class="admin-empty">Impossible de charger les messages.</div>'; }
 }
