@@ -7855,6 +7855,17 @@ async function dmMaybeApplyAdminVoiceEffect(){
   dmStopAdminVoiceEffect();
   const raw=dmState.localStream;
   const effect=await dmCreateResembleVoiceStream(raw);
+  // CORRECTIF (2026-09-10) : effect.firstReady n'est écouté que par ce
+  // Promise.race. Si elle échoue APRÈS que le délai de 15s a déjà perdu la
+  // course (donc après que ce try/catch a déjà rendu la main), plus rien
+  // n'écoute son rejet : Promise.race ne "consomme" pas la promesse
+  // perdante, ce qui produisait une vraie fuite de rejet non géré (même
+  // symptôme "Failed to fetch" brut, indépendamment du bug CORS côté
+  // fonction Edge). On attache un .catch() silencieux séparé, dès sa
+  // création, pour que ce rejet tardif soit toujours "récupéré" — sans
+  // changer le comportement du Promise.race lui-même (une promesse peut
+  // avoir plusieurs consommateurs indépendants).
+  effect.firstReady.catch(()=>{});
   try{
     await Promise.race([
       effect.firstReady,
