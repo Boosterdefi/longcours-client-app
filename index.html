@@ -3558,6 +3558,20 @@ button,input,textarea,select{max-width:100%;}
       </section>
 
       <div class="admin-modal" id="adminProductModal"><div class="admin-sheet"><div class="admin-card-head"><h3 id="adminProductModalTitle">Ajouter un produit</h3><button class="topbar-close" onclick="adminCloseProductModal()">&times;</button></div><input type="hidden" id="adminProductId"><div class="admin-field"><div class="admin-label">Nom</div><input class="admin-input" id="prodName"></div><div class="admin-grid two"><div class="admin-field"><div class="admin-label">Catégorie</div><input class="admin-input" id="prodCat" placeholder="electronics"></div><div class="admin-field"><div class="admin-label">Libellé catégorie</div><input class="admin-input" id="prodCatLabel" placeholder="Électronique"></div></div><div class="admin-grid two"><div class="admin-field"><div class="admin-label">Prix</div><input class="admin-input" id="prodPrice" type="number" step="0.01"></div><div class="admin-field"><div class="admin-label">Ancien prix</div><input class="admin-input" id="prodOldPrice" type="number" step="0.01"></div></div><div class="admin-field"><div class="admin-label">Marque</div><input class="admin-input" id="prodBrand"></div><div class="admin-field"><div class="admin-label">Image URL</div><input class="admin-input" id="prodImage"></div><div class="admin-field"><div class="admin-label">Description</div><textarea class="admin-input" id="prodDescription" rows="4"></textarea></div><label class="admin-row" style="font-size:11px;font-weight:800;margin-bottom:12px"><input id="prodActive" type="checkbox" checked style="flex:0 0 auto"> Produit visible</label><button class="admin-btn primary" style="width:100%" onclick="adminSaveProduct()">Enregistrer</button></div></div>
+      <!-- AJOUT (demande admin) : fiche détaillée d'un utilisateur — toute son
+           activité (dépôts, retraits, achats, pronostics, gains, Havre,
+           candidatures Longcours…) et toutes ses discussions, avec les
+           actions Solde / Discuter / Rendre-Retirer admin / Supprimer. -->
+      <div class="admin-modal" id="adminUserDetailModal"><div class="admin-sheet" style="max-width:640px">
+        <div class="admin-card-head"><h3 id="adminUserDetailName">Utilisateur</h3><button class="topbar-close" onclick="adminCloseUserDetail()">&times;</button></div>
+        <div id="adminUserDetailHeader"></div>
+        <div class="admin-tabs">
+          <button class="admin-tab active" id="adminUdTabActivity" onclick="adminUserDetailTab('activity')">🧾 Activité</button>
+          <button class="admin-tab" id="adminUdTabConv" onclick="adminUserDetailTab('discussions')">💬 Discussions</button>
+        </div>
+        <div id="adminUserDetailBody"><div class="admin-empty">Chargement…</div></div>
+      </div></div>
+
       <div class="admin-modal" id="adminBalanceModal"><div class="admin-sheet"><div class="admin-card-head"><h3>💳 Ajuster le compte</h3><button class="topbar-close" onclick="adminCloseBalanceModal()">&times;</button></div><p id="adminBalanceUserLabel"></p><input type="hidden" id="adminBalanceUserId"><div class="admin-grid two"><div class="admin-field"><div class="admin-label">USDT (+ / -)</div><input class="admin-input" id="adminBalanceUsdt" type="number" step="0.0001"></div><div class="admin-field"><div class="admin-label">Points (+ / -)</div><input class="admin-input" id="adminBalancePoints" type="number" step="1"></div></div><div class="admin-field"><div class="admin-label">Motif</div><input class="admin-input" id="adminBalanceReason" value="Ajustement administrateur"></div><button class="admin-btn primary" style="width:100%" onclick="adminSaveBalance()">Confirmer l'ajustement</button></div></div>
       <div class="admin-modal" id="adminSupportModal"><div class="admin-sheet"><div class="admin-card-head"><h3>💬 Répondre au client</h3><button class="topbar-close" onclick="adminCloseSupportModal()">&times;</button></div><div id="adminSupportThreadBody" class="admin-list" style="margin-bottom:10px"></div><input type="hidden" id="adminSupportUserId"><textarea class="admin-input" id="adminSupportReply" rows="4" placeholder="Écrire une réponse…"></textarea><button class="admin-btn primary" style="width:100%;margin-top:8px" onclick="adminSendSupportReply()">Répondre comme support</button></div></div>
       <div class="admin-toast" id="adminToast"></div>
@@ -6555,12 +6569,44 @@ async function lcPersistActiveRequest(payload){
   }catch(err){ console.error('[longcours] sauvegarde demande échouée:', err); }
 }
 
+// AJOUT : une demande dont la date limite est dépassée sans avoir réuni les
+// points requis n'est plus valable — on la considère "expirée". Comparée à
+// la même échéance (deadlineISO à 00:00:00) que celle affichée par le
+// décompte, pour rester cohérent avec ce que l'utilisateur voit à l'écran.
+function lcIsRequestPastDeadline(req){
+  if(!req || !req.deadlineISO) return false;
+  return new Date(req.deadlineISO+'T00:00:00').getTime() <= Date.now();
+}
+// Vrai juste après un appel à lcLoadActiveRequest() qui a détecté et purgé
+// une demande expirée — permet à l'appelant (renderLongcoursScreen) de
+// prévenir l'utilisateur au lieu de rouvrir silencieusement le formulaire.
+let lcLastLoadExpired = false;
+
+// Marque la demande active comme expirée (délai dépassé, points non
+// réunis) : côté serveur si connecté, et localement dans tous les cas.
+// Contrairement à lcCancelActiveRequest (action volontaire, bouton "Annuler
+// ma demande"), celle-ci est déclenchée automatiquement — par le décompte en
+// direct ou au rechargement de la demande — et libère la place pour qu'une
+// nouvelle demande puisse être envoyée.
+async function lcExpireActiveRequest(){
+  const expiredId = lcActiveRequestId;
+  lcActiveRequest = null;
+  lcClearLocalRequest();
+  if(sbUser && expiredId){
+    try{ await sb.from('longcours_requests').update({status:'expired'}).eq('id', expiredId); }
+    catch(err){ console.error('[longcours] expiration demande échouée:', err); }
+  }
+  lcActiveRequestId = null;
+  lcActiveRequestPromise = null;
+}
+
 // Recharge la demande "en cours" (si une existe) au démarrage / à la
 // connexion, pour savoir si l'écran Longcours doit rouvrir directement le
 // décompte plutôt que le formulaire.
 function lcLoadActiveRequest(force){
   if(lcActiveRequestPromise && !force) return lcActiveRequestPromise;
   lcActiveRequestPromise = (async ()=>{
+    lcLastLoadExpired = false;
     if(sbUser){
       try{
         const { data, error } = await sb.from('longcours_requests')
@@ -6584,6 +6630,14 @@ function lcLoadActiveRequest(force){
             deadlineISO: data.deadline_date,
             required: Number(data.required_points)||0
           };
+          // AJOUT : le délai a pu expirer pendant que l'app était fermée —
+          // on l'expire immédiatement au lieu de rouvrir un décompte figé à
+          // zéro, pour que l'utilisateur retrouve un formulaire vierge.
+          if(lcIsRequestPastDeadline(lcActiveRequest)){
+            await lcExpireActiveRequest();
+            lcLastLoadExpired = true;
+            return null;
+          }
           lcSaveLocalRequest(lcActiveRequest);
           return lcActiveRequest;
         }
@@ -6598,6 +6652,12 @@ function lcLoadActiveRequest(force){
       }
     }
     const local = lcLoadLocalRequest();
+    if(lcIsRequestPastDeadline(local)){
+      lcActiveRequestId = null;
+      await lcExpireActiveRequest();
+      lcLastLoadExpired = true;
+      return null;
+    }
     lcActiveRequest = local;
     return local;
   })();
@@ -6643,7 +6703,20 @@ function lcOpenCountModalFromActive(){
 // existe une demande en cours et, si oui, rouvre directement son décompte.
 async function renderLongcoursScreen(){
   await lcLoadActiveRequest();
-  if(lcActiveRequest) lcOpenCountModalFromActive();
+  if(lcActiveRequest){
+    lcOpenCountModalFromActive();
+  } else if(lcLastLoadExpired){
+    // La demande précédente vient d'être expirée (délai dépassé) : le
+    // formulaire redevient utilisable, on prévient l'utilisateur pourquoi.
+    lcLastLoadExpired = false;
+    const form = document.getElementById('lcRequestForm');
+    if(form) form.reset();
+    const btn = document.getElementById('lcSubmitBtn');
+    if(btn){ btn.disabled = false; btn.textContent = 'Envoyer la demande'; }
+    const msg = document.getElementById('lcConfirmMsg');
+    if(msg) msg.classList.remove('show');
+    showToast("Ta demande de séjour a expiré (délai dépassé). Tu peux en envoyer une nouvelle.", '⏳');
+  }
 }
 
 function lcSubmitRequest(e){
@@ -6768,6 +6841,29 @@ function lcRenderCountModal({durationValue, required, current, departure, deadli
         document.getElementById('lcCdMins').textContent='0';
         document.getElementById('lcCdSecs').textContent='0';
         clearInterval(lcCountdownTimer); lcCountdownTimer=null;
+        // AJOUT : le délai vient d'être atteint en direct (modale ouverte) —
+        // si les points requis n'ont pas été réunis à temps, la demande est
+        // expirée automatiquement (comme au rechargement, voir
+        // lcExpireActiveRequest) au lieu de rester figée sur "0".
+        if(!(required>0 && current>=required)){
+          lcExpireActiveRequest().then(()=>{
+            const form = document.getElementById('lcRequestForm');
+            if(form) form.reset();
+            const submitBtn = document.getElementById('lcSubmitBtn');
+            if(submitBtn){ submitBtn.disabled = false; submitBtn.textContent = 'Envoyer la demande'; }
+            const confirmMsg = document.getElementById('lcConfirmMsg');
+            if(confirmMsg) confirmMsg.classList.remove('show');
+            const body = document.getElementById('lcCountBody');
+            if(body) body.innerHTML = `
+              <div class="lc-reject-box">
+                <div class="ic">&#x23f3;</div>
+                <h3>Demande expirée</h3>
+                <p>Le délai pour atteindre les points requis est dépassé. Cette demande de séjour est annulée automatiquement — tu peux en envoyer une nouvelle dès maintenant.</p>
+              </div>
+              <button class="btn btn-primary lc-home-btn" onclick="lcCloseCountModal()">Fermer</button>
+            `;
+          });
+        }
         return;
       }
       const d = Math.floor(diff/86400000);
@@ -7893,19 +7989,38 @@ function dmHandleIncomingCall(callRow){
   volRougeSetSuspended(true);
   dmState.currentCall = callRow;
   dmState.isCaller = false; dmState.iceCallerLen = 0; dmState.iceCalleeLen = 0;
+  // CORRECTIF (boutons appel entrant invisibles / impossible de raccrocher en
+  // cas de connexion instable) : l'écran d'appel, la sonnerie et les boutons
+  // Refuser/Décrocher s'affichent maintenant IMMÉDIATEMENT, avec un nom
+  // générique ("Utilisateur") en attendant. Avant, tout (overlay + boutons)
+  // restait bloqué derrière la requête réseau qui va chercher le nom/avatar
+  // de l'appelant, sans aucun .catch : en cas de connexion lente ou coupée à
+  // cet instant précis, cette requête pouvait ne jamais aboutir, et l'appel
+  // sonnait sans qu'aucun bouton n'apparaisse — impossible de décrocher OU
+  // de raccrocher. Le nom/avatar réels remplacent maintenant le générique dès
+  // qu'ils arrivent, en tâche de fond, sans jamais retarder ni bloquer
+  // l'affichage des boutons.
+  dmState.callPeer = { id: callRow.caller_id, name: 'Utilisateur', avatarUrl: null };
+  const overlay = document.getElementById('dmCallOverlay');
+  overlay.style.display = 'flex';
+  document.getElementById('dmCallAvatar').textContent = '?';
+  document.getElementById('dmCallName').textContent = dmState.callPeer.name;
+  document.getElementById('dmCallStatus').textContent = callRow.call_type==='video' ? 'Appel vidéo entrant…' : 'Appel entrant…';
+  document.getElementById('dmCallVideoWrap').style.display = 'none';
+  dmRenderIncomingActions();
+  dmStartRingtone();
   sb.from('profiles').select('first_name, avatar_url').eq('id', callRow.caller_id).maybeSingle().then(({data})=>{
+    // L'appel a peut-être déjà été refusé/raccroché au moment où cette
+    // réponse arrive — on ne touche plus à l'écran dans ce cas.
+    if(!dmState.currentCall || dmState.currentCall.id !== callRow.id) return;
     dmState.callPeer = { id: callRow.caller_id, name: (data && data.first_name) || 'Utilisateur', avatarUrl: data && data.avatar_url || null };
-    const overlay = document.getElementById('dmCallOverlay');
-    overlay.style.display = 'flex';
-    document.getElementById('dmCallAvatar').innerHTML = dmState.callPeer.avatarUrl
+    const avatarEl = document.getElementById('dmCallAvatar');
+    if(avatarEl) avatarEl.innerHTML = dmState.callPeer.avatarUrl
       ? `<img src="${esc(dmState.callPeer.avatarUrl)}" alt="">`
       : esc((dmState.callPeer.name||'?').charAt(0).toUpperCase());
-    document.getElementById('dmCallName').textContent = dmState.callPeer.name;
-    document.getElementById('dmCallStatus').textContent = callRow.call_type==='video' ? 'Appel vidéo entrant…' : 'Appel entrant…';
-    document.getElementById('dmCallVideoWrap').style.display = 'none';
-    dmRenderIncomingActions();
-    dmStartRingtone();
-  });
+    const nameEl = document.getElementById('dmCallName');
+    if(nameEl) nameEl.textContent = dmState.callPeer.name;
+  }, ()=>{ /* échec réseau : on garde le nom générique, les boutons restent déjà affichés et utilisables */ });
   dmSubscribeCallUpdates(callRow.id, false);
 }
 async function dmAcceptCall(){
@@ -8119,7 +8234,137 @@ function adminTab(name,btn){document.querySelectorAll('.admin-panel').forEach(p=
 async function adminRefresh(){if(!isAdminUser())return;try{const {data}=await sb.rpc('admin_dashboard_stats');const s=data||{};document.getElementById('adminStatUsers').textContent=s.total_users??'—';document.getElementById('adminStatBalance').textContent=(Number(s.total_balance||0)).toFixed(2)+' U';document.getElementById('adminStatProducts').textContent=adminProductsCache.length||'—';document.getElementById('adminStatSupport').textContent=s.pending_withdrawals_count??'0';}catch(e){}}
 async function adminLoadUsers(){const box=document.getElementById('adminUsersList'), calls=document.getElementById('adminCallUsersList');try{const {data,error}=await sb.rpc('admin_list_users');if(error)throw error;adminUsersCache=data||[];if(box)adminRenderUsers(box,adminUsersCache);if(calls)adminRenderCallUsers(calls,adminUsersCache);const c=document.getElementById('adminUserCount');if(c)c.textContent=adminUsersCache.length+' comptes';adminRefresh()}catch(e){if(box)box.innerHTML='<div class="admin-empty">Impossible de charger les comptes.</div>';if(calls)calls.innerHTML='<div class="admin-empty">Impossible de charger les comptes.</div>'}}
 function adminUserMatches(u,q){q=(q||'').toLowerCase();return !q||[u.first_name,u.email,u.phone,u.country].some(v=>String(v||'').toLowerCase().includes(q))}
-function adminUserHtml(u,callMode=false){const avatar=u.avatar_url?`<img src="${esc(u.avatar_url)}" alt="">`:esc((u.first_name||'?').charAt(0).toUpperCase());return `<div class="admin-user"><div class="admin-avatar">${avatar}</div><div class="admin-main"><div class="admin-name">${esc(u.first_name||'Utilisateur')} ${u.is_admin?'<span class="admin-badge">ADMIN</span>':''}</div><div class="admin-meta">${esc(u.email||'Sans email')} • ${esc(u.country||'—')}</div><div class="admin-meta">💳 ${Number(u.balance||0).toFixed(2)} USDT • ⭐ ${Number(u.points_balance||0).toFixed(0)} pts</div></div>${callMode?`<div class="admin-actions"><button class="admin-btn success" onclick="adminCallUser('${u.id}','${esc(u.first_name||'Utilisateur')}','audio')">🎧</button><button class="admin-btn primary" onclick="adminCallUser('${u.id}','${esc(u.first_name||'Utilisateur')}','video')">📹</button></div>`:`<div class="admin-actions"><button class="admin-btn success" onclick="adminOpenBalance('${u.id}','${esc(u.first_name||'Utilisateur')}')">💳</button><button class="admin-btn dark" onclick="adminOpenUserChat('${u.id}','${esc(u.first_name||'Utilisateur')}','${esc(u.avatar_url||'')}')">💬</button>${u.id!==sbUser.id?`<button class="admin-btn danger" onclick="adminDeleteUser('${u.id}','${esc(u.first_name||'Utilisateur')}')">🗑️</button>`:''}</div>`}</div>`}
+// AJOUT (demande admin) : cliquer sur une ligne utilisateur (hors mode appel)
+// ouvre sa fiche détaillée (adminOpenUserDetail) — activité complète,
+// discussions, rôle admin. event.stopPropagation() sur les boutons d'action
+// existants pour qu'ils continuent de fonctionner seuls sans déclencher
+// l'ouverture de la fiche en plus.
+function adminUserHtml(u,callMode=false){const avatar=u.avatar_url?`<img src="${esc(u.avatar_url)}" alt="">`:esc((u.first_name||'?').charAt(0).toUpperCase());return `<div class="admin-user"${callMode?'':` onclick="adminOpenUserDetail('${u.id}')" style="cursor:pointer"`}><div class="admin-avatar">${avatar}</div><div class="admin-main"><div class="admin-name">${esc(u.first_name||'Utilisateur')} ${u.is_admin?'<span class="admin-badge">ADMIN</span>':''}</div><div class="admin-meta">${esc(u.email||'Sans email')} • ${esc(u.country||'—')}</div><div class="admin-meta">💳 ${Number(u.balance||0).toFixed(2)} USDT • ⭐ ${Number(u.points_balance||0).toFixed(0)} pts</div></div>${callMode?`<div class="admin-actions"><button class="admin-btn success" onclick="adminCallUser('${u.id}','${esc(u.first_name||'Utilisateur')}','audio')">🎧</button><button class="admin-btn primary" onclick="adminCallUser('${u.id}','${esc(u.first_name||'Utilisateur')}','video')">📹</button></div>`:`<div class="admin-actions"><button class="admin-btn success" onclick="event.stopPropagation();adminOpenBalance('${u.id}','${esc(u.first_name||'Utilisateur')}')">💳</button><button class="admin-btn dark" onclick="event.stopPropagation();adminOpenUserChat('${u.id}','${esc(u.first_name||'Utilisateur')}','${esc(u.avatar_url||'')}')">💬</button>${u.id!==sbUser.id?`<button class="admin-btn danger" onclick="event.stopPropagation();adminDeleteUser('${u.id}','${esc(u.first_name||'Utilisateur')}')">🗑️</button>`:''}</div>`}</div>`}
+
+// ---- Fiche détaillée d'un utilisateur (activité + discussions + rôle admin) ----
+let adminDetailUserId = null;
+let adminDetailActivityCache = null;
+let adminDetailConvCache = null;
+function adminOpenUserDetail(id){
+  const u = adminUsersCache.find(x=>x.id===id); if(!u) return;
+  adminDetailUserId = id;
+  adminDetailActivityCache = null;
+  adminDetailConvCache = null;
+  adminRenderUserDetailHeader(u);
+  document.getElementById('adminUserDetailModal').classList.add('open');
+  adminUserDetailTab('activity');
+}
+function adminCloseUserDetail(){
+  document.getElementById('adminUserDetailModal').classList.remove('open');
+  adminDetailUserId = null;
+}
+function adminRenderUserDetailHeader(u){
+  const nameEl = document.getElementById('adminUserDetailName');
+  if(nameEl) nameEl.textContent = u.first_name || 'Utilisateur';
+  const avatar = u.avatar_url?`<img src="${esc(u.avatar_url)}" alt="">`:esc((u.first_name||'?').charAt(0).toUpperCase());
+  const header = document.getElementById('adminUserDetailHeader');
+  if(!header) return;
+  header.innerHTML = `
+    <div class="admin-user"><div class="admin-avatar">${avatar}</div><div class="admin-main">
+      <div class="admin-name">${esc(u.first_name||'Utilisateur')} ${u.is_admin?'<span class="admin-badge">ADMIN</span>':''}</div>
+      <div class="admin-meta">${esc(u.email||'Sans email')} • ${esc(u.country||'—')}</div>
+      <div class="admin-meta">💳 ${Number(u.balance||0).toFixed(2)} USDT • ⭐ ${Number(u.points_balance||0).toFixed(0)} pts</div>
+    </div></div>
+    <div class="admin-actions" style="justify-content:flex-start;margin:10px 0">
+      <button class="admin-btn success" onclick="adminOpenBalance('${u.id}','${esc(u.first_name||'Utilisateur')}')">💳 Solde</button>
+      <button class="admin-btn dark" onclick="adminOpenUserChat('${u.id}','${esc(u.first_name||'Utilisateur')}','${esc(u.avatar_url||'')}')">💬 Discuter</button>
+      ${u.id!==sbUser.id?`<button class="admin-btn primary" onclick="adminToggleUserRole('${u.id}',${u.is_admin?'true':'false'},'${esc(u.first_name||'Utilisateur')}')">${u.is_admin?'🚫 Retirer admin':'👑 Rendre admin'}</button><button class="admin-btn danger" onclick="adminDeleteUser('${u.id}','${esc(u.first_name||'Utilisateur')}')">🗑️ Supprimer</button>`:'<div class="admin-meta">Ton propre compte — rôle et suppression indisponibles ici.</div>'}
+    </div>`;
+}
+function adminUserDetailTab(name){
+  const a = document.getElementById('adminUdTabActivity'), c = document.getElementById('adminUdTabConv');
+  if(a) a.classList.toggle('active', name==='activity');
+  if(c) c.classList.toggle('active', name==='discussions');
+  if(name==='activity') adminLoadUserActivity(); else adminLoadUserConversations();
+}
+async function adminLoadUserActivity(){
+  const id = adminDetailUserId; if(!id) return;
+  const body = document.getElementById('adminUserDetailBody');
+  if(adminDetailActivityCache){ adminRenderUserActivity(adminDetailActivityCache); return; }
+  if(body) body.innerHTML = '<div class="admin-empty">Chargement…</div>';
+  try{
+    const {data,error} = await sb.rpc('admin_list_user_activity',{p_user_id:id});
+    if(error) throw error;
+    adminDetailActivityCache = data||[];
+    if(adminDetailUserId===id) adminRenderUserActivity(adminDetailActivityCache);
+  }catch(e){ if(adminDetailUserId===id && body) body.innerHTML = '<div class="admin-empty">Impossible de charger l\'activité.</div>'; }
+}
+function adminActivityIcon(type){
+  const map = {deposit:'💰',withdrawal:'💸',marketplace_order:'🛍️',game_transaction:'🎯',coupon:'🎫',score_pick:'⚽',match_pick:'⚽',match_round:'🏆',score_round:'🏆',prize:'🎁',havre_position:'📈',longcours_job:'💼',support_message:'💬',duo_invite:'🤝'};
+  return map[type]||'•';
+}
+function adminRenderUserActivity(list){
+  const body = document.getElementById('adminUserDetailBody'); if(!body) return;
+  if(!list.length){ body.innerHTML = '<div class="admin-empty">Aucune activité enregistrée.</div>'; return; }
+  body.innerHTML = `<div class="admin-list">${list.map(a=>`
+    <div class="admin-user"><div class="admin-avatar" style="background:#f6e7cf;color:#a65d08;font-size:17px">${adminActivityIcon(a.activity_type)}</div>
+      <div class="admin-main">
+        <div class="admin-name">${esc(a.label||a.activity_type)}</div>
+        <div class="admin-meta">${new Date(a.created_at).toLocaleString('fr-FR')}${a.status?' • '+esc(a.status):''}</div>
+      </div>
+      ${a.amount!=null?`<div class="admin-money">${Number(a.amount).toFixed(2)}</div>`:''}
+    </div>`).join('')}</div>`;
+}
+async function adminLoadUserConversations(){
+  const id = adminDetailUserId; if(!id) return;
+  const body = document.getElementById('adminUserDetailBody');
+  if(adminDetailConvCache){ adminRenderUserConversations(adminDetailConvCache); return; }
+  if(body) body.innerHTML = '<div class="admin-empty">Chargement…</div>';
+  try{
+    const {data,error} = await sb.rpc('admin_list_user_conversations',{p_user_id:id});
+    if(error) throw error;
+    adminDetailConvCache = data||[];
+    if(adminDetailUserId===id) adminRenderUserConversations(adminDetailConvCache);
+  }catch(e){ if(adminDetailUserId===id && body) body.innerHTML = '<div class="admin-empty">Impossible de charger les discussions.</div>'; }
+}
+function adminRenderUserConversations(list){
+  const body = document.getElementById('adminUserDetailBody'); if(!body) return;
+  if(!list.length){ body.innerHTML = '<div class="admin-empty">Aucune discussion.</div>'; return; }
+  body.innerHTML = `<div class="admin-list">${list.map(c=>{
+    const avatar = c.other_avatar_url?`<img src="${esc(c.other_avatar_url)}" alt="">`:esc((c.other_first_name||'?').charAt(0).toUpperCase());
+    const preview = c.last_body ? esc(c.last_body).slice(0,50) : (c.last_type==='voice'?'Message vocal':c.last_type==='image'?'Image':c.last_type==='file'?'Fichier':'—');
+    return `<div class="admin-user" style="cursor:pointer" onclick="adminOpenUserConversation('${c.conversation_id}')">
+      <div class="admin-avatar">${avatar}</div>
+      <div class="admin-main">
+        <div class="admin-name">${esc(c.other_first_name||'Utilisateur')}</div>
+        <div class="admin-meta">${preview}</div>
+      </div>
+      <div class="admin-meta">${c.message_count} msg</div>
+    </div>`;
+  }).join('')}</div>`;
+}
+async function adminOpenUserConversation(convId){
+  const body = document.getElementById('adminUserDetailBody'); if(!body) return;
+  body.innerHTML = '<div class="admin-empty">Chargement…</div>';
+  try{
+    const {data,error} = await sb.rpc('admin_get_conversation_messages',{p_conversation_id:convId});
+    if(error) throw error;
+    const msgs = data||[];
+    body.innerHTML = `<button class="admin-btn dark" style="margin-bottom:10px" onclick="adminUserDetailTab('discussions')">← Retour aux discussions</button>
+      <div class="admin-list">${msgs.length?msgs.map(m=>`
+        <div class="admin-card" style="padding:9px 12px;margin-bottom:8px">
+          <div class="admin-meta" style="margin-bottom:3px"><b>${esc(m.sender_name||'Utilisateur')}</b> • ${new Date(m.created_at).toLocaleString('fr-FR')}</div>
+          <div style="font-size:12px">${m.type==='text'?esc(m.body||''):m.type==='voice'?'🎤 Message vocal':m.type==='image'?'🖼️ Image':'📎 '+esc(m.media_name||'Fichier')}</div>
+        </div>`).join(''):'<div class="admin-empty">Aucun message.</div>'}</div>`;
+  }catch(e){ body.innerHTML = '<div class="admin-empty">Impossible de charger les messages.</div>'; }
+}
+async function adminToggleUserRole(id,isAdminNow,name){
+  const makeAdmin = !isAdminNow;
+  if(!confirm(makeAdmin?`Donner le rôle admin à ${name} ?`:`Retirer le rôle admin à ${name} ?`)) return;
+  try{
+    const {error} = await sb.rpc('admin_set_is_admin',{p_user_id:id,p_value:makeAdmin});
+    if(error) throw error;
+    const u = adminUsersCache.find(x=>x.id===id); if(u) u.is_admin = makeAdmin;
+    adminToast(makeAdmin?'Rôle admin accordé ✓':'Rôle admin retiré ✓');
+    adminFilterUsers();
+    if(adminDetailUserId===id && u) adminRenderUserDetailHeader(u);
+  }catch(e){ adminToast(e.message||'Action impossible'); }
+}
 function adminRenderUsers(box,arr){box.innerHTML=arr.length?arr.map(u=>adminUserHtml(u)).join(''):'<div class="admin-empty">Aucun compte trouvé.</div>'}
 function adminRenderCallUsers(box,arr){box.innerHTML=arr.length?arr.map(u=>adminUserHtml(u,true)).join(''):'<div class="admin-empty">Aucun compte trouvé.</div>'}
 function adminFilterUsers(){const q=document.getElementById('adminUserSearch')?.value;adminRenderUsers(document.getElementById('adminUsersList'),adminUsersCache.filter(u=>adminUserMatches(u,q)))}
