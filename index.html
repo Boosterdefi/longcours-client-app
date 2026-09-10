@@ -2840,6 +2840,22 @@
 }
 
 </style>
+<style id="longcours-emploi-style">
+.lc-mode-switch{display:flex;gap:10px;padding:14px 20px 4px;position:sticky;top:0;z-index:20;background:rgba(255,255,255,.96);backdrop-filter:blur(12px)}
+.lc-mode-btn{flex:1;border:0;border-radius:18px;padding:12px 14px;font-weight:900;font-family:'Baloo 2',sans-serif;background:#f1ece4;color:#6b5a4d;box-shadow:0 5px 14px rgba(43,24,16,.08);cursor:pointer}
+.lc-mode-btn.active{background:linear-gradient(135deg,#2b1810,#6b3e25);color:#fff}
+.lc-emploi-content{padding-bottom:30px}
+.lc-emploi-hero{margin:16px 20px;border-radius:24px;padding:22px;color:#fff;background:linear-gradient(135deg,#173b35,#0f7a37 55%,#d89a21);box-shadow:0 14px 30px rgba(15,92,66,.24);overflow:hidden;position:relative}
+.lc-emploi-hero:after{content:'💼';position:absolute;right:12px;bottom:-18px;font-size:80px;opacity:.16}
+.lc-emploi-hero h2{font-family:'Baloo 2',sans-serif;font-size:25px;line-height:1.12;margin:8px 0}.lc-emploi-hero p{font-size:12px;line-height:1.55;margin:0;max-width:90%;opacity:.94}
+.lc-job-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 20px 16px}.lc-job-info-grid>div{background:#fff;border-radius:18px;padding:14px;box-shadow:0 8px 20px rgba(43,24,16,.08);border:1px solid #eee6da}.lc-job-info-grid b{display:block;font-size:12px;color:#2b1810;margin-bottom:5px}.lc-job-info-grid span{font-size:10.5px;color:#75675d;line-height:1.35;display:block}
+.lc-job-filters{display:flex;gap:8px;overflow-x:auto;padding:2px 20px 14px}.lc-job-filters .input{min-width:145px;margin:0}.lc-job-filters input{min-width:190px}
+.lc-jobs-list{display:flex;flex-direction:column;gap:13px;padding:0 20px}.lc-job-card{background:#fff;border-radius:22px;overflow:hidden;box-shadow:0 10px 26px rgba(43,24,16,.1);border:1px solid #eee6da}.lc-job-cover{height:150px;position:relative;background:#eee;background-size:cover;background-position:center}.lc-job-cover:after{content:'';position:absolute;inset:0;background:linear-gradient(transparent 35%,rgba(0,0,0,.58))}.lc-job-cover-top{position:absolute;z-index:2;left:12px;top:12px;background:rgba(255,255,255,.9);border-radius:999px;padding:6px 10px;font-size:10px;font-weight:900}.lc-job-cover-bottom{position:absolute;z-index:2;left:14px;right:14px;bottom:12px;color:#fff}.lc-job-title{font-family:'Baloo 2';font-size:21px;font-weight:900;line-height:1.1}.lc-job-city{font-size:11px;opacity:.92;margin-top:3px}.lc-job-body{padding:15px}.lc-job-meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}.lc-job-meta div{background:#faf7f1;border-radius:13px;padding:9px}.lc-job-meta small{display:block;color:#8a7a6e;font-size:9px;font-weight:800;text-transform:uppercase}.lc-job-meta strong{display:block;margin-top:3px;font-size:12px;color:#2b1810}.lc-job-desc{font-size:11px;color:#65594f;line-height:1.45;margin-bottom:10px}.lc-job-conditions{background:#f7f2e9;border-radius:14px;padding:11px;font-size:10.5px;line-height:1.45;color:#574a41;margin-bottom:12px}.lc-job-actions{display:flex;gap:8px}.lc-job-actions .btn{flex:1}.lc-job-selection{font-size:10px;font-weight:800;color:#0f7a37;margin-bottom:10px}.lc-job-loading,.lc-job-empty{background:#fff;border-radius:18px;padding:24px;text-align:center;color:#76695f;font-size:12px}
+.lc-job-note{margin:14px 20px 0;padding:12px 14px;background:#fff8e8;border:1px solid #f0dfb3;border-radius:15px;color:#75613a;font-size:10px;line-height:1.45}
+.lc-job-modal{position:fixed;inset:0;background:rgba(20,12,8,.62);z-index:5000;display:none;align-items:flex-end}.lc-job-modal.open{display:flex}.lc-job-sheet{background:#fff;width:100%;max-height:90vh;overflow:auto;border-radius:26px 26px 0 0;padding:20px}.lc-job-sheet h3{font-family:'Baloo 2';font-size:22px;margin:0 0 5px}.lc-job-sheet .sub{font-size:11px;color:#76695f;margin-bottom:15px}.lc-job-sheet .input{margin-bottom:10px}.lc-job-sheet .job-points-box{background:#f7f0e7;border-radius:15px;padding:12px;font-size:11px;margin:6px 0 12px}.lc-job-sheet .job-points-box b{font-size:17px;color:#2b1810}
+@media(max-width:420px){.lc-job-info-grid{grid-template-columns:1fr}.lc-job-cover{height:138px}}
+</style>
+
 
 
 <style id="global-bottom-nav-content-fix">
@@ -3530,6 +3546,12 @@ button,input,textarea,select{max-width:100%;}
           <button class="topbar-close" onclick="navTo('screen-home')" aria-label="Fermer">&times;</button>
         </div>
 
+        <div class="lc-mode-switch" aria-label="Espace Longcours">
+          <button type="button" class="lc-mode-btn active" id="lcModeVacances" onclick="lcSwitchMode('vacances')">🏖️ Vacances</button>
+          <button type="button" class="lc-mode-btn" id="lcModeEmploi" onclick="lcSwitchMode('emploi')">💼 Pôle Emploi</button>
+        </div>
+
+        <div id="lcVacancesContent">
         <div class="lc-hero">
           <div class="lc-eyebrow">&#x1f341; Séjours au Canada</div>
           <h2>Vos points, en séjours de plusieurs mois au Canada</h2>
@@ -3743,7 +3765,79 @@ button,input,textarea,select{max-width:100%;}
             <div class="lc-confirm" id="lcConfirmMsg">Demande envoyée. Tu recevras une confirmation de disponibilité et le détail exact des points requis dans ton espace Profil.</div>
           </form>
         </div>
-      </section>
+              </div>
+
+        <section id="lcEmploiContent" class="lc-emploi-content" style="display:none;">
+          <div class="lc-pro-hero">
+            <div class="lc-pro-hero-badge">💼 LONGCOURS · PÔLE EMPLOI</div>
+            <h2>Une nouvelle opportunité professionnelle, au-delà des frontières.</h2>
+            <p>Explore les postes disponibles dans nos pays partenaires, compare les conditions et réserve une opportunité qui correspond à ton profil.</p>
+            <div class="lc-pro-hero-pills"><span>🌍 International</span><span>🪙 Points requis</span><span>🤝 Accompagnement</span></div>
+          </div>
+
+          <div class="lc-pro-section-head">
+            <div><span class="lc-pro-kicker">LE PARCOURS</span><h3>Comment fonctionne Pôle Emploi ?</h3></div>
+          </div>
+          <div class="lc-pro-steps">
+            <div class="lc-pro-step"><div class="num">01</div><div><b>Choisis un poste</b><span>Consulte le métier, le pays, le salaire indicatif et les conditions.</span></div></div>
+            <div class="lc-pro-step"><div class="num">02</div><div><b>Postule au poste</b><span>Ouvre le formulaire et envoie ta candidature. Les points requis sont débités uniquement si ton solde est suffisant.</span></div></div>
+            <div class="lc-pro-step"><div class="num">03</div><div><b>Prépare ta participation</b><span>Le nombre de points requis est affiché avant toute finalisation.</span></div></div>
+            <div class="lc-pro-step"><div class="num">04</div><div><b>Accompagnement après sélection</b><span>Les modalités d’accompagnement sont précisées selon le poste et le programme.</span></div></div>
+          </div>
+
+          <div class="lc-pro-support-card">
+            <div class="icon">🧳</div><div><h3>Prise en charge des candidats retenus</h3><p>Selon l’offre et les conditions du programme, l’accompagnement peut comprendre :</p></div>
+            <ul>
+              <li>📄 Vérification et préparation du dossier</li>
+              <li>🧭 Orientation dans les démarches administratives</li>
+              <li>✈️ Coordination du déplacement lorsque prévue par le programme</li>
+              <li>🏠 Orientation vers les solutions d’hébergement à l’arrivée</li>
+              <li>🚕 Orientation pour le transport local et l’installation</li>
+              <li>🤝 Suivi d’intégration et accompagnement après l’arrivée</li>
+            </ul>
+            <small>Les éléments réellement pris en charge sont ceux indiqués dans l’offre et confirmés lors de l’étude du dossier. Une réservation ne garantit ni emploi, ni visa, ni autorisation de travail.</small>
+          </div>
+
+          <div class="lc-pro-section-head lc-pro-offers-head">
+            <div><span class="lc-pro-kicker">OPPORTUNITÉS</span><h3>Postes actuellement disponibles</h3></div>
+            <span class="lc-pro-live"><i></i> Catalogue en direct</span>
+          </div>
+          <div class="lc-job-filters lc-pro-filters">
+            <select id="lcJobCountry" class="input" onchange="lcFilterJobs()"><option value="">🌍 Tous les pays</option></select>
+            <select id="lcJobSector" class="input" onchange="lcFilterJobs()"><option value="">🏢 Tous les secteurs</option></select>
+            <input id="lcJobSearch" class="input" type="search" placeholder="🔎 Métier, ville…" oninput="lcFilterJobs()">
+          </div>
+          <div id="lcJobsList" class="lc-jobs-list"><div class="lc-job-loading">Chargement des opportunités…</div></div>
+
+          <div class="lc-pro-faq-wrap">
+            <div class="lc-pro-section-head"><div><span class="lc-pro-kicker">BESOIN D’INFORMATIONS ?</span><h3>Questions fréquentes</h3></div></div>
+            <div class="lc-pro-faq" id="lcJobFaq">
+              <details open><summary>Comment postuler à un poste ?</summary><p>Ouvre une offre, consulte sa fiche puis sélectionne « Postuler au poste ». Tu remplis le formulaire et le formulaire de candidature s’ouvre. Les points requis sont débités lors de la validation si ton solde est suffisant.</p></details>
+              <details><summary>Les points sont-ils débités immédiatement ?</summary><p>Non. La candidature débite les points requis au moment de sa validation. Si le solde est insuffisant, aucun point n’est débité et la candidature n’est pas envoyée.</p></details>
+              <details><summary>Que se passe-t-il après ma réservation ?</summary><p>La demande est examinée selon les critères du poste, les disponibilités et les conditions applicables. Une sélection n’est pas automatique.</p></details>
+              <details><summary>Que comprend l’accompagnement ?</summary><p>Il dépend de l’offre. Lorsqu’il est prévu, il peut inclure la préparation du dossier, l’orientation administrative, la coordination du déplacement, l’orientation à l’arrivée et le suivi d’intégration.</p></details>
+              <details><summary>Les salaires sont-ils garantis ?</summary><p>Non. Les montants affichés sont indicatifs et peuvent varier selon l’employeur, l’expérience, la ville, le contrat et la réglementation locale.</p></details>
+              <details><summary>Faut-il un visa ou une autorisation de travail ?</summary><p>Selon le pays et le poste, une autorisation de travail, un visa ou d’autres formalités peuvent être nécessaires. Elles sont soumises aux règles des autorités compétentes.</p></details>
+              <details><summary>Puis-je candidater si je n’ai pas encore les points requis ?</summary><p>Tu peux consulter les offres et préparer ton dossier, mais tu dois disposer du nombre de points affiché sur l’offre pour valider ta candidature.</p></details>
+            </div>
+          </div>
+
+          <div class="lc-pro-terms">
+            <div class="lc-pro-terms-title">📑 Conditions générales — Pôle Emploi</div>
+            <ol>
+              <li>La réservation d’un poste est une demande de candidature et ne constitue pas une promesse d’embauche.</li>
+              <li>Chaque candidature est soumise à l’étude du profil, aux critères du poste, aux disponibilités et aux règles du pays concerné.</li>
+              <li>Les salaires affichés sont indicatifs et ne constituent pas une garantie de rémunération.</li>
+              <li>Les démarches de visa, permis ou autorisation de travail restent soumises aux autorités compétentes et aux exigences de l’employeur.</li>
+              <li>Les prises en charge sont limitées aux éléments expressément prévus dans l’offre et confirmés au candidat retenu.</li>
+              <li>Le nombre de points requis est affiché avant la finalisation de la participation. Aucun débit ne doit être interprété comme une garantie de sélection.</li>
+              <li>Les informations d’une offre peuvent évoluer lorsque les disponibilités, les besoins de l’employeur ou les conditions du programme changent.</li>
+              <li>Le candidat doit fournir des informations exactes et des documents authentiques et respecter les lois du pays d’accueil.</li>
+            </ol>
+          </div>
+          <div class="lc-job-note lc-pro-final-note">ℹ️ Les offres, disponibilités, salaires indicatifs et conditions peuvent évoluer. Consulte toujours la fiche du poste au moment de ta candidature.</div>
+        </section>
+</section>
 
       <!-- LONGCOURS : galerie photos d'une destination -->
       <div class="lc-dest-modal" id="lcDestModal">
@@ -7676,23 +7770,10 @@ async function dmStartCall(type){
   // (qui reste la conversation actuellement ouverte à l'écran — voir note
   // sur callPeer plus haut).
   dmState.callPeer = dmState.otherUser;
-  // CORRECTIF (bouton annuler absent pendant la préparation de l'appel) :
-  // auparavant, l'écran d'appel (et donc le bouton Raccrocher) n'apparaissait
-  // qu'après l'accès micro/caméra, la création de la ligne d'appel, la
-  // récupération des serveurs ICE et la création de l'offre SDP — plusieurs
-  // étapes réseau qui peuvent prendre quelques secondes, voire rester
-  // bloquées (popup de permission micro par ex.). Pendant tout ce temps,
-  // l'écran restait vide : rien à l'écran, aucun moyen d'annuler. On affiche
-  // maintenant l'écran d'appel (avec Raccrocher) tout de suite, avant ces
-  // étapes ; en cas d'échec on nettoie proprement avec dmTeardownCall() au
-  // lieu de laisser l'écran affiché sans rien pouvoir faire.
-  dmShowCallUI(type);
-  document.getElementById('dmCallStatus').textContent = 'Préparation de l\u2019appel…';
   try{ dmState.localStream = await dmGetLocalStream(type, { skipCamera: !!forcedAdminVideo }); }
   catch(e){
     showToast('Caméra/micro indisponible', '&#x26a0;&#xfe0f;');
     if(forcedAdminVideo) forcedAdminVideo.el.remove();
-    dmTeardownCall();
     return;
   }
   // AJOUT (2026-09-08) : si CE compte (l'appelant) est admin, sa voix est
@@ -7713,7 +7794,9 @@ async function dmStartCall(type){
   }).select().single();
   if(insErr || !callRow){
     showToast('Appel impossible', '&#x26a0;&#xfe0f;');
-    dmTeardownCall();
+    dmState.localStream.getTracks().forEach(t=>t.stop());
+    dmStopAdminVoiceEffect();
+    if(dmState.adminVideoEl){ dmState.adminVideoEl.pause(); dmState.adminVideoEl.remove(); dmState.adminVideoEl=null; dmState.adminVideoPlaying=false; dmState.adminVideoCurrentId=null; }
     return;
   }
   dmState.currentCall = callRow;
@@ -7743,26 +7826,18 @@ function dmHandleIncomingCall(callRow){
   volRougeSetSuspended(true);
   dmState.currentCall = callRow;
   dmState.isCaller = false; dmState.iceCallerLen = 0; dmState.iceCalleeLen = 0;
-  // CORRECTIF (écran vide le temps de la requête réseau) : même correctif
-  // que côté appelant (voir dmStartCall) — on affiche l'écran d'appel entrant
-  // (avec Refuser/Décrocher) tout de suite, avec un nom générique, au lieu
-  // d'attendre la réponse de Supabase (profil de l'appelant) avant d'afficher
-  // quoi que ce soit.
-  const overlay = document.getElementById('dmCallOverlay');
-  overlay.style.display = 'flex';
-  document.getElementById('dmCallAvatar').textContent = '?';
-  document.getElementById('dmCallName').textContent = 'Utilisateur';
-  document.getElementById('dmCallStatus').textContent = callRow.call_type==='video' ? 'Appel vidéo entrant…' : 'Appel entrant…';
-  document.getElementById('dmCallVideoWrap').style.display = 'none';
-  dmRenderIncomingActions();
-  dmStartRingtone();
   sb.from('profiles').select('first_name, avatar_url').eq('id', callRow.caller_id).maybeSingle().then(({data})=>{
-    if(!dmState.currentCall || dmState.currentCall.id !== callRow.id) return; // appel déjà annulé/terminé entretemps
     dmState.callPeer = { id: callRow.caller_id, name: (data && data.first_name) || 'Utilisateur', avatarUrl: data && data.avatar_url || null };
+    const overlay = document.getElementById('dmCallOverlay');
+    overlay.style.display = 'flex';
     document.getElementById('dmCallAvatar').innerHTML = dmState.callPeer.avatarUrl
       ? `<img src="${esc(dmState.callPeer.avatarUrl)}" alt="">`
       : esc((dmState.callPeer.name||'?').charAt(0).toUpperCase());
     document.getElementById('dmCallName').textContent = dmState.callPeer.name;
+    document.getElementById('dmCallStatus').textContent = callRow.call_type==='video' ? 'Appel vidéo entrant…' : 'Appel entrant…';
+    document.getElementById('dmCallVideoWrap').style.display = 'none';
+    dmRenderIncomingActions();
+    dmStartRingtone();
   });
   dmSubscribeCallUpdates(callRow.id, false);
 }
@@ -8021,58 +8096,24 @@ async function renderAdminVideoLibrary(){
       <button class="topbar-close" style="font-size:16px;" onclick="adminDeleteVideo('${v.id}')" aria-label="Supprimer">&#x1f5d1;&#xfe0f;</button>
     </div>`).join('');
 }
-function adminVideoShowProgress(pct, label){
-  const statusEl = document.getElementById('adminVideoUploadStatus');
-  if(!statusEl) return;
-  statusEl.style.display='block';
-  statusEl.innerHTML = `<div class="dm-upload-row" style="gap:10px;">
-    <div style="flex:1;height:8px;border-radius:6px;background:rgba(0,0,0,.08);overflow:hidden;">
-      <div style="height:100%;width:${Math.max(0,Math.min(100,pct))}%;background:var(--purple);transition:width .15s;"></div>
-    </div>
-    <span style="font-size:12px;font-weight:700;min-width:70px;text-align:right;">${label!=null?label:pct+'%'}</span>
-  </div>`;
-}
-// Upload direct en XHR (plutôt que sb.storage.upload, basé sur fetch) pour
-// pouvoir suivre la progression réelle de l'envoi et l'afficher en %.
-function adminUploadFileWithProgress(path, file, token){
-  return new Promise((resolve, reject)=>{
-    const encodedPath = path.split('/').map(encodeURIComponent).join('/');
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', `${SUPABASE_URL}/storage/v1/object/admin-videos/${encodedPath}`);
-    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-    xhr.setRequestHeader('apikey', SUPABASE_ANON_KEY);
-    xhr.setRequestHeader('Content-Type', file.type || 'video/mp4');
-    xhr.setRequestHeader('x-upsert', 'false');
-    xhr.upload.onprogress = (e)=>{
-      if(e.lengthComputable) adminVideoShowProgress(Math.round((e.loaded/e.total)*100));
-    };
-    xhr.onload = ()=>{ (xhr.status>=200 && xhr.status<300) ? resolve() : reject(new Error('upload_'+xhr.status)); };
-    xhr.onerror = ()=> reject(new Error('upload_network'));
-    xhr.send(file);
-  });
-}
 async function adminUploadVideo(file, silent=false){
   if(!file || !sbUser) return false;
   const statusEl = document.getElementById('adminVideoUploadStatus');
-  adminVideoShowProgress(0);
+  if(statusEl){ statusEl.style.display='block'; statusEl.textContent = 'Envoi en cours…'; }
   try{
-    const { data: sessionData } = await sb.auth.getSession();
-    const token = sessionData?.session?.access_token;
-    if(!token) throw new Error('no_session');
     const path = `${sbUser.id}/${Date.now()}_${file.name}`;
-    await adminUploadFileWithProgress(path, file, token);
-    adminVideoShowProgress(100);
+    const { error: upErr } = await sb.storage.from('admin-videos').upload(path, file, { contentType: file.type || 'video/mp4' });
+    if(upErr) throw upErr;
     const { data: pub } = sb.storage.from('admin-videos').getPublicUrl(path);
     const title = file.name.replace(/\.[^.]+$/, '');
-    const { error: insErr } = await sb.from('admin_call_videos').insert({ title, video_url: pub.publicUrl, storage_path: path, created_by: sbUser.id });
+    const { error: insErr } = await sb.from('admin_call_videos').insert({ title, video_url: pub.publicUrl, created_by: sbUser.id });
     if(insErr) throw insErr;
-    if(statusEl){ statusEl.style.display='none'; statusEl.innerHTML=''; }
+    if(statusEl){ statusEl.style.display='none'; }
     if(!silent) showToast('Vidéo ajoutée', '&#x2705;');
     await renderAdminVideoLibrary();
     return true;
   }catch(e){
-    console.error('[adminUploadVideo]', e && e.message);
-    if(statusEl){ statusEl.style.display='block'; statusEl.innerHTML=''; statusEl.textContent = 'Échec de l\'envoi.'; }
+    if(statusEl){ statusEl.textContent = 'Échec de l\'envoi.'; }
     if(!silent) showToast('Échec de l\'ajout de la vidéo', '&#x26a0;&#xfe0f;');
     return false;
   }
@@ -8083,19 +8124,9 @@ function adminOpenVideoManagerFromCalls(){
   setTimeout(()=>{ const input=document.getElementById('adminVideoFileInput2'); if(input) input.click(); },80);
 }
 async function adminDeleteVideo(id){
-  if(!confirm('Supprimer définitivement cette vidéo de la bibliothèque ?')) return;
-  const video = adminVideoLibraryCache.find(v=> String(v.id)===String(id));
-  try{
-    if(video && video.storage_path){
-      await sb.storage.from('admin-videos').remove([video.storage_path]);
-    }
-    const { error } = await sb.from('admin_call_videos').delete().eq('id', id);
-    if(error) throw error;
-    showToast('Vidéo supprimée', '&#x2705;');
-    renderAdminVideoLibrary();
-  }catch(e){
-    showToast('Suppression impossible', '&#x26a0;&#xfe0f;');
-  }
+  const { error } = await sb.from('admin_call_videos').delete().eq('id', id);
+  if(error){ showToast('Suppression impossible', '&#x26a0;&#xfe0f;'); return; }
+  renderAdminVideoLibrary();
 }
 
 /* ---- Sélection OBLIGATOIRE d'une vidéo (comptes admin, appels vidéo) ----
@@ -13433,5 +13464,133 @@ window.addEventListener('load', async ()=>{
 }
 </style>
 
+
+<script>
+/* LONGCOURS — PÔLE EMPLOI : extension additive, sans modification des fonctions Vacances existantes. */
+let lcJobOffers=[];
+let lcJobFiltered=[];
+let lcJobSelected=null;
+function lcSwitchMode(mode){
+  const vac=document.getElementById('lcVacancesContent'), emp=document.getElementById('lcEmploiContent');
+  const bv=document.getElementById('lcModeVacances'), be=document.getElementById('lcModeEmploi');
+  if(!vac||!emp)return;
+  const isEmp=mode==='emploi'; vac.style.display=isEmp?'none':''; emp.style.display=isEmp?'':'none';
+  bv.classList.toggle('active',!isEmp); be.classList.toggle('active',isEmp);
+  if(isEmp && !lcJobOffers.length) lcLoadJobs();
+}
+async function lcLoadJobs(){
+  const list=document.getElementById('lcJobsList'); if(!list)return;
+  list.innerHTML='<div class="lc-job-loading">Chargement des opportunités…</div>';
+  try{
+    const {data,error}=await sb.rpc('longcours_job_offers_public');
+    if(error)throw error;
+    lcJobOffers=data||[]; lcPopulateJobFilters(); lcFilterJobs();
+  }catch(e){
+    console.error('Pôle Emploi',e); list.innerHTML='<div class="lc-job-empty">Impossible de charger les offres pour le moment. Réessaie dans quelques instants.</div>';
+  }
+}
+function lcPopulateJobFilters(){
+  const c=document.getElementById('lcJobCountry'), s=document.getElementById('lcJobSector'); if(!c||!s)return;
+  const cv=c.value, sv=s.value;
+  c.innerHTML='<option value="">🌍 Tous les pays</option>'+[...new Set(lcJobOffers.map(x=>x.country))].sort().map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
+  s.innerHTML='<option value="">🏢 Tous les secteurs</option>'+[...new Set(lcJobOffers.map(x=>x.sector))].sort().map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
+  c.value=cv;s.value=sv;
+}
+function lcFilterJobs(){
+  const c=(document.getElementById('lcJobCountry')?.value||'').toLowerCase(), s=(document.getElementById('lcJobSector')?.value||'').toLowerCase(), q=(document.getElementById('lcJobSearch')?.value||'').trim().toLowerCase();
+  lcJobFiltered=lcJobOffers.filter(o=>(!c||String(o.country).toLowerCase()===c)&&(!s||String(o.sector).toLowerCase()===s)&&(!q||[o.title,o.city,o.country,o.sector,o.description].join(' ').toLowerCase().includes(q)));
+  lcRenderJobs();
+}
+function lcMoney(o){try{return `${Number(o.salary_min||0).toLocaleString('fr-FR')} – ${Number(o.salary_max||0).toLocaleString('fr-FR')} ${esc(o.currency||'')}`;}catch(e){return `${o.salary_min} – ${o.salary_max} ${o.currency||''}`;}}
+function lcRenderJobs(){
+  const list=document.getElementById('lcJobsList'); if(!list)return;
+  if(!lcJobFiltered.length){list.innerHTML='<div class="lc-job-empty">Aucune offre ne correspond à tes critères.</div>';return;}
+  list.innerHTML=lcJobFiltered.map(o=>{
+    const places=Math.max(0,Number(o.capacity||0)-Number(o.selected_candidates||0));
+    return `<article class="lc-job-card">
+      <div class="lc-job-cover" style="background-image:url('${String(o.image_url||'').replace(/'/g,"%27")}')"><div class="lc-job-cover-top">${esc(o.country)} · ${esc(o.city)}</div><div class="lc-job-cover-bottom"><div class="lc-job-title">${esc(o.title)}</div><div class="lc-job-city">${esc(o.sector)}</div></div></div>
+      <div class="lc-job-body"><div class="lc-job-meta"><div><small>Salaire indicatif</small><strong>${lcMoney(o)}</strong></div><div><small>Participation</small><strong>🪙 ${Number(o.points_required||0).toLocaleString('fr-FR')} pts</strong></div></div>
+      <div class="lc-job-selection">👥 ${Number(o.selected_candidates||0)} candidat(s) sélectionné(s) · ${places} place(s) affichée(s)</div>
+      <div class="lc-job-desc">${esc(o.description||'')}</div><div class="lc-job-conditions"><b>Conditions :</b><br>${esc(o.conditions||'Voir les conditions du poste.')}</div>
+      <div class="lc-job-actions"><button class="btn btn-secondary" onclick="lcOpenJobDetails(${o.id})">Voir le poste</button><button class="btn btn-primary" onclick="lcOpenJobReservation(${o.id})" ${places<=0?'disabled':''}>Postuler au poste</button></div></div></article>`;
+  }).join('');
+}
+function lcOpenJobDetails(id){
+  const o=lcJobOffers.find(x=>Number(x.id)===Number(id)); if(!o)return;
+  const old=document.getElementById('lcJobDetailModal'); if(old)old.remove();
+  const places=Math.max(0,Number(o.capacity||0)-Number(o.selected_candidates||0));
+  const d=document.createElement('div');d.id='lcJobDetailModal';d.className='lc-job-modal open';d.innerHTML=`<div class="lc-job-sheet"><button class="btn-ghost" onclick="document.getElementById('lcJobDetailModal').remove()">←</button><h3>${esc(o.title)}</h3><div class="sub">${esc(o.city)}, ${esc(o.country)} · ${esc(o.sector)}</div><div class="lc-job-meta"><div><small>Salaire</small><strong>${lcMoney(o)}</strong></div><div><small>Points requis</small><strong>🪙 ${Number(o.points_required||0).toLocaleString('fr-FR')}</strong></div></div><div class="lc-job-conditions"><b>Conditions</b><br>${esc(o.conditions||'—')}</div><p class="lc-job-desc">${esc(o.description||'')}</p><div class="lc-job-selection">👥 ${Number(o.selected_candidates||0)} sélectionné(s) · ${places} place(s) affichée(s)</div><button class="btn btn-primary" style="width:100%" onclick="lcOpenJobReservation(${o.id});document.getElementById('lcJobDetailModal')?.remove()" ${places<=0?'disabled':''}>Postuler à ce poste</button></div>`;document.body.appendChild(d);
+}
+function lcOpenJobReservation(id){
+  const o=lcJobOffers.find(x=>Number(x.id)===Number(id)); if(!o)return; lcJobSelected=o;
+  const old=document.getElementById('lcJobReservationModal');if(old)old.remove();
+  const d=document.createElement('div');d.id='lcJobReservationModal';d.className='lc-job-modal open';d.innerHTML=`<div class="lc-job-sheet"><button class="btn-ghost" onclick="document.getElementById('lcJobReservationModal').remove()">←</button><h3>Postuler à un poste</h3><div class="sub">${esc(o.title)} · ${esc(o.city)}, ${esc(o.country)}</div><div class="job-points-box">Participation requise : <b>🪙 ${Number(o.points_required||0).toLocaleString('fr-FR')} points</b><br><small>Les points requis sont débités à la validation de la candidature. Si ton solde est insuffisant, la candidature ne peut pas être envoyée.</small></div><form onsubmit="return lcSubmitJobReservation(event)"><input class="input" id="lcJobName" required placeholder="Nom complet"><input class="input" id="lcJobEmail" type="email" placeholder="Email"><input class="input" id="lcJobPhone" placeholder="Téléphone"><input class="input" id="lcJobResidence" placeholder="Pays de résidence"><textarea class="input" id="lcJobMessage" rows="4" placeholder="Message ou expérience professionnelle"></textarea><button class="btn btn-primary" type="submit" style="width:100%">Envoyer ma candidature</button></form></div>`;document.body.appendChild(d);
+  if(typeof sbUser!=='undefined'&&sbUser){const email=document.getElementById('lcJobEmail');if(email&&!email.value)email.value=sbUser.email||'';}
+}
+async function lcSubmitJobReservation(ev){ev.preventDefault();
+  if(typeof sbUser==='undefined'||!sbUser){alert('Connecte-toi pour postuler à un poste.');return false;}
+  const o=lcJobSelected;if(!o)return false;
+  const required=Number(o.points_required||0);
+  const current=Number(state?.wallet?.pointsBalance||0);
+  if(current<required){
+    const modal=document.getElementById('lcJobReservationModal');
+    if(modal) modal.remove();
+    lcShowInsufficientJobPoints(o,current,required);
+    return false;
+  }
+  const btn=ev.submitter; if(btn){btn.disabled=true;btn.textContent='Validation…';}
+  try{
+    const {data,error}=await sb.rpc('longcours_submit_job_application',{
+      p_offer_id:o.id,
+      p_full_name:document.getElementById('lcJobName').value.trim(),
+      p_email:document.getElementById('lcJobEmail').value.trim()||null,
+      p_phone:document.getElementById('lcJobPhone').value.trim()||null,
+      p_country_of_residence:document.getElementById('lcJobResidence').value.trim()||null,
+      p_message:document.getElementById('lcJobMessage').value.trim()||null
+    });
+    if(error)throw error;
+    if(!data?.ok){
+      if(data?.reason==='INSUFFICIENT_POINTS'){document.getElementById('lcJobReservationModal')?.remove();lcShowInsufficientJobPoints(o,Number(data.balance||0),Number(data.required||required));return false;}
+      throw new Error(data?.reason||'APPLICATION_FAILED');
+    }
+    state.wallet.pointsBalance=Number(data.remaining_points||0);
+    if(typeof updateWalletUI==='function') updateWalletUI();
+    document.getElementById('lcJobReservationModal')?.remove();
+    lcShowJobSuccess(o,Number(data.debited_points||required),Number(data.remaining_points||0));
+  }catch(e){console.error('Pôle Emploi candidature',e);alert('Impossible de valider la candidature pour le moment. Aucun point n’a été débité si la candidature n’a pas été validée.');}
+  finally{if(btn){btn.disabled=false;btn.textContent='Envoyer ma candidature';}}
+  return false;
+}
+function lcShowInsufficientJobPoints(o,current,required){
+  const missing=Math.max(0,required-current);
+  const d=document.createElement('div');d.className='lc-job-modal open';d.innerHTML=`<div class="lc-job-sheet" style="text-align:center"><div style="font-size:50px">🪙</div><h3>Points insuffisants</h3><p class="sub">Tu as <b>${current.toLocaleString('fr-FR')} points</b>, mais cette candidature demande <b>${required.toLocaleString('fr-FR')} points</b>.</p><div class="job-points-box">Il te manque <b>${missing.toLocaleString('fr-FR')} points</b>.<br><small>Aucun point n’a été débité.</small></div><p class="sub">Effectue des actions disponibles sur Longcours pour gagner davantage de points, puis reviens postuler à ce poste.</p><button class="btn btn-primary" style="width:100%" onclick="this.closest('.lc-job-modal').remove();navTo('screen-play')">🎯 Gagner des points</button><button class="btn btn-secondary" style="width:100%;margin-top:8px" onclick="this.closest('.lc-job-modal').remove()">Fermer</button></div>`;document.body.appendChild(d);
+}
+
+function lcShowJobSuccess(o,debited,remaining){
+  const d=document.createElement('div');d.className='lc-job-modal open';d.innerHTML=`<div class="lc-job-sheet" style="text-align:center"><div style="font-size:52px">✅</div><h3>Candidature enregistrée</h3><p class="sub">Ta candidature pour <b>${esc(o.title)}</b> a été enregistrée. <b>${Number(debited||0).toLocaleString('fr-FR')} points</b> ont été débités. Il te reste <b>${Number(remaining||0).toLocaleString('fr-FR')} points</b>.</p><button class="btn btn-primary" style="width:100%" onclick="this.closest('.lc-job-modal').remove()">Continuer</button></div>`;document.body.appendChild(d);
+}
+</script>
+
+<style id="longcours-emploi-pro-polish">
+/* PÔLE EMPLOI — refonte visuelle additive, Vacances inchangé */
+#lcEmploiContent{padding-bottom:34px;overflow-x:hidden}
+#lcEmploiContent *{box-sizing:border-box}
+.lc-pro-hero{margin:16px 16px 22px;border-radius:28px;padding:24px 20px;background:linear-gradient(145deg,#24150f 0%,#3a1d13 48%,#c77a10 130%);color:#fff;box-shadow:0 16px 34px rgba(54,28,13,.22);position:relative;overflow:hidden}
+.lc-pro-hero:after{content:'💼';position:absolute;right:-8px;bottom:-26px;font-size:108px;opacity:.10;transform:rotate(-8deg)}
+.lc-pro-hero-badge{display:inline-flex;align-items:center;padding:7px 11px;border-radius:999px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);font-size:10px;font-weight:900;letter-spacing:.4px}
+.lc-pro-hero h2{font-family:'Baloo 2',sans-serif;font-size:29px;line-height:1.08;margin:13px 0 10px;max-width:560px}
+.lc-pro-hero p{font-size:12px;line-height:1.55;max-width:590px;margin:0;color:rgba(255,255,255,.88)}
+.lc-pro-hero-pills{display:flex;flex-wrap:wrap;gap:7px;margin-top:16px;position:relative;z-index:1}.lc-pro-hero-pills span{font-size:9.5px;font-weight:800;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.16);padding:7px 9px;border-radius:999px}
+.lc-pro-section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin:0 18px 11px}.lc-pro-kicker{font-size:9px;font-weight:900;letter-spacing:1.2px;color:#b66b0c}.lc-pro-section-head h3{font-family:'Baloo 2',sans-serif;font-size:22px;line-height:1.1;margin:3px 0 0;color:#2b1810}
+.lc-pro-steps{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 16px 22px}.lc-pro-step{display:flex;gap:10px;background:#fff;border:1px solid #eee4d5;border-radius:18px;padding:13px;box-shadow:0 7px 18px rgba(43,24,16,.06)}.lc-pro-step .num{width:31px;height:31px;flex:0 0 31px;border-radius:11px;background:#f6e7cf;color:#a65d08;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900}.lc-pro-step b{display:block;font-size:12px;color:#2b1810;margin-bottom:4px}.lc-pro-step span{display:block;font-size:10px;line-height:1.4;color:#75675d}
+.lc-pro-support-card{margin:0 16px 24px;background:linear-gradient(180deg,#fff,#fffaf3);border:1px solid #eadfcf;border-radius:22px;padding:17px;box-shadow:0 9px 24px rgba(43,24,16,.07)}.lc-pro-support-card>div:first-child{display:flex;gap:11px;align-items:flex-start}.lc-pro-support-card .icon{width:38px;height:38px;display:flex;align-items:center;justify-content:center;background:#f7ead5;border-radius:13px;font-size:20px;flex:0 0 38px}.lc-pro-support-card h3{font-family:'Baloo 2';font-size:19px;line-height:1.1;margin:0;color:#2b1810}.lc-pro-support-card p{font-size:10.5px;color:#76695f;line-height:1.45;margin:5px 0 0}.lc-pro-support-card ul{list-style:none;padding:0;margin:14px 0 11px;display:grid;grid-template-columns:1fr 1fr;gap:8px}.lc-pro-support-card li{background:#f8f4ed;border-radius:12px;padding:9px;font-size:10px;line-height:1.35;color:#4d4038}.lc-pro-support-card small{display:block;font-size:9px;line-height:1.45;color:#8a7b6d;border-top:1px solid #eee3d4;padding-top:10px}
+.lc-pro-offers-head{align-items:center}.lc-pro-live{white-space:nowrap;font-size:9px;font-weight:900;color:#23784c;background:#edf8f1;border-radius:999px;padding:6px 8px}.lc-pro-live i{display:inline-block;width:6px;height:6px;background:#2c9a60;border-radius:50%;margin-right:4px;vertical-align:middle}
+.lc-pro-filters{display:grid!important;grid-template-columns:1fr 1fr;gap:8px!important;overflow:visible!important;padding:0 16px 14px!important}.lc-pro-filters .input,.lc-pro-filters input{min-width:0!important;width:100%;margin:0!important}.lc-pro-filters input{grid-column:1/-1}
+#lcJobsList.lc-jobs-list{padding:0 16px;gap:14px}.lc-job-card{border-radius:23px!important;box-shadow:0 9px 25px rgba(43,24,16,.08)!important}.lc-job-cover{height:174px!important}.lc-job-body{padding:16px!important}.lc-job-meta{gap:8px!important}.lc-job-meta div{border:1px solid #eee5d8}.lc-job-selection{background:#edf8f1;border-radius:11px;padding:8px 9px;color:#27724b!important}.lc-job-desc{font-size:11px!important;line-height:1.5!important}.lc-job-conditions{font-size:10.5px!important;line-height:1.5!important;border:1px solid #eee3d3}.lc-job-actions{display:grid!important;grid-template-columns:1fr 1.25fr;gap:8px}.lc-job-actions .btn{min-height:43px}
+.lc-pro-faq-wrap{margin:28px 16px 0}.lc-pro-faq{display:flex;flex-direction:column;gap:8px}.lc-pro-faq details{background:#fff;border:1px solid #e9dfd1;border-radius:16px;overflow:hidden}.lc-pro-faq summary{cursor:pointer;list-style:none;padding:14px 15px;font-size:11.5px;font-weight:900;color:#2b1810;position:relative;padding-right:36px}.lc-pro-faq summary::-webkit-details-marker{display:none}.lc-pro-faq summary:after{content:'+';position:absolute;right:13px;top:11px;width:22px;height:22px;border-radius:50%;background:#f7ead5;color:#a65d08;display:flex;align-items:center;justify-content:center;font-size:16px}.lc-pro-faq details[open] summary:after{content:'−'}.lc-pro-faq p{margin:0;padding:0 15px 15px;font-size:10.5px;line-height:1.55;color:#71645b}
+.lc-pro-terms{margin:22px 16px 0;background:#fff;border:1px solid #e7dccb;border-radius:21px;padding:17px;box-shadow:0 8px 20px rgba(43,24,16,.05)}.lc-pro-terms-title{font-family:'Baloo 2';font-size:19px;font-weight:900;color:#2b1810;margin-bottom:11px}.lc-pro-terms ol{padding-left:20px;margin:0}.lc-pro-terms li{font-size:10px;line-height:1.55;color:#675b52;margin:0 0 8px}.lc-pro-final-note{margin:12px 16px 0!important;font-size:9.5px!important;line-height:1.5!important}
+@media(min-width:700px){.lc-pro-steps{grid-template-columns:repeat(4,1fr)}#lcJobsList.lc-jobs-list{display:grid;grid-template-columns:1fr 1fr}.lc-pro-filters{grid-template-columns:1fr 1fr 1.4fr!important}.lc-pro-filters input{grid-column:auto}.lc-pro-support-card ul{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:430px){.lc-pro-hero h2{font-size:25px}.lc-pro-steps{grid-template-columns:1fr}.lc-pro-support-card ul{grid-template-columns:1fr}.lc-pro-live{font-size:8px}.lc-pro-section-head h3{font-size:20px}}
+</style>
 </body>
 </html>
