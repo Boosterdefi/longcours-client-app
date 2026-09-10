@@ -440,11 +440,12 @@
   .dm-voice-progress > i{ display:block; height:100%; width:0; border-radius:99px; background:currentColor; opacity:.9; transition:width .08s linear; }
   .dm-voice-times{ display:flex; justify-content:space-between; gap:6px; margin-top:4px; font-size:9px; opacity:.72; }
   .dm-voice-dur{ font-size:11px; flex-shrink:0; min-width:30px; text-align:right; opacity:.8; }
-  .dm-msg-actions{ display:flex; gap:4px; margin-left:5px; opacity:0; transition:opacity .15s; }
-  .dm-bubble-wrap:hover .dm-msg-actions,.dm-bubble-wrap:focus-within .dm-msg-actions{ opacity:1; }
+  .dm-msg-actions{ display:flex; gap:4px; margin-left:5px; opacity:0; pointer-events:none; transition:opacity .15s; }
+  .dm-bubble-wrap:hover .dm-msg-actions,.dm-bubble-wrap:focus-within .dm-msg-actions{ opacity:1; pointer-events:auto; }
+  /* AJOUT : le bouton de suppression ne doit être visible qu'après un appui long sur le message (pas en permanence sur mobile) */
+  .dm-bubble-wrap.show-actions .dm-msg-actions{ opacity:1; pointer-events:auto; }
   .dm-msg-delete{ border:0; background:rgba(255,93,108,.12); color:#ff8a96; width:24px; height:24px; border-radius:50%; cursor:pointer; font-size:12px; }
   .dm-msg-status{ font-size:10px; opacity:.72; }
-  @media(max-width:600px){ .dm-msg-actions{ opacity:1; } }
 
   /* Bulles image / fichier (2026-09-07) */
   .dm-image-bubble{ padding:4px !important; overflow:hidden; }
@@ -7490,8 +7491,42 @@ function dmAppendMessage(m, scroll){
   const del = `<span class="dm-msg-actions"><button class="dm-msg-delete" title="Supprimer pour les deux" onclick="event.stopPropagation();dmDeleteMessage('${esc(m.id||'')}')">&#128465;</button></span>`;
   wrap.innerHTML = `<div class="${bubbleClass}">${inner}</div><div class="dm-bubble-meta">${time}${tick}${del}</div>`;
   box.appendChild(wrap);
+  dmSetupLongPress(wrap);
   if(m.id) dmState.msgEls[m.id] = wrap;
   if(scroll !== false) box.scrollTop = box.scrollHeight;
+}
+// AJOUT : appui long sur une bulle de message pour révéler le bouton de
+// suppression (masqué en permanence sinon). Un tap ailleurs referme l'action.
+function dmSetupLongPress(wrap){
+  if(!wrap || wrap._dmLongPressBound) return;
+  wrap._dmLongPressBound = true;
+  let timer = null, moved = false;
+  const LONG_PRESS_MS = 450;
+  const openActions = () => {
+    document.querySelectorAll('.dm-bubble-wrap.show-actions').forEach(el => { if(el !== wrap) el.classList.remove('show-actions'); });
+    wrap.classList.add('show-actions');
+    if(navigator.vibrate) { try{ navigator.vibrate(12); }catch(e){} }
+  };
+  const start = () => { moved = false; clearTimeout(timer); timer = setTimeout(openActions, LONG_PRESS_MS); };
+  const cancelTimer = () => { clearTimeout(timer); timer = null; };
+  const onMove = () => { moved = true; cancelTimer(); };
+  wrap.addEventListener('touchstart', start, {passive:true});
+  wrap.addEventListener('touchmove', onMove, {passive:true});
+  wrap.addEventListener('touchend', cancelTimer);
+  wrap.addEventListener('touchcancel', cancelTimer);
+  wrap.addEventListener('mousedown', start);
+  wrap.addEventListener('mouseup', cancelTimer);
+  wrap.addEventListener('mouseleave', cancelTimer);
+  wrap.addEventListener('contextmenu', (e) => { e.preventDefault(); openActions(); });
+}
+if(!window._dmOutsideTapToCloseBound){
+  window._dmOutsideTapToCloseBound = true;
+  const closeAllActions = (e) => {
+    if(e.target.closest && e.target.closest('.dm-bubble-wrap')) return;
+    document.querySelectorAll('.dm-bubble-wrap.show-actions').forEach(el => el.classList.remove('show-actions'));
+  };
+  document.addEventListener('touchstart', closeAllActions, {passive:true});
+  document.addEventListener('click', closeAllActions);
 }
 function dmUpdateReadTick(m){
   const wrap = dmState.msgEls && dmState.msgEls[m.id];
@@ -7618,6 +7653,76 @@ async function dmUploadAndSendMedia(file){
   }
 }
 
+/* ---- Voice Transformer (admin) ----
+   Applique automatiquement un effet de voix féminine (pitch relevé + légère
+   mise en avant des aigus) sur les messages vocaux envoyés par un compte
+   admin, pour ne pas exposer la voix réelle de l'admin aux utilisateurs. */
+const LC_VOICE_FX_SEMITONES = 5; // ~ +5 demi-tons, équivalent typique masculin -> féminin
+
+async function lcApplyFemaleVoiceEffect(blob){
+  const arrayBuffer = await blob.arrayBuffer();
+  const decodeCtx = new (window.AudioContext || window.webkitAudioContext)();
+  let srcBuffer;
+  try{
+    srcBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
+  } finally {
+    decodeCtx.close();
+  }
+  const pitchRatio = Math.pow(2, LC_VOICE_FX_SEMITONES / 12);
+  const outLength = Math.max(1, Math.ceil(srcBuffer.length / pitchRatio));
+  const offlineCtx = new OfflineAudioContext(srcBuffer.numberOfChannels, outLength, srcBuffer.sampleRate);
+
+  const source = offlineCtx.createBufferSource();
+  source.buffer = srcBuffer;
+  source.playbackRate.value = pitchRatio; // relève le pitch -> voix plus haute et plus légère
+
+  const lowCut = offlineCtx.createBiquadFilter();
+  lowCut.type = 'highpass';
+  lowCut.frequency.value = 140; // atténue le grave résiduel
+
+  const presence = offlineCtx.createBiquadFilter();
+  presence.type = 'peaking';
+  presence.frequency.value = 2600;
+  presence.Q.value = 1;
+  presence.gain.value = 3;
+
+  const brightness = offlineCtx.createBiquadFilter();
+  brightness.type = 'highshelf';
+  brightness.frequency.value = 4000;
+  brightness.gain.value = 4;
+
+  source.connect(lowCut).connect(presence).connect(brightness).connect(offlineCtx.destination);
+  source.start(0);
+  const rendered = await offlineCtx.startRendering();
+  return { blob: lcAudioBufferToWav(rendered), duration: rendered.length / rendered.sampleRate };
+}
+
+function lcAudioBufferToWav(buffer){
+  const numChannels = buffer.numberOfChannels;
+  const sampleRate = buffer.sampleRate;
+  const numFrames = buffer.length;
+  const blockAlign = numChannels * 2;
+  const dataSize = numFrames * blockAlign;
+  const arrBuf = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(arrBuf);
+  const writeStr = (offset, str) => { for(let i=0;i<str.length;i++) view.setUint8(offset+i, str.charCodeAt(i)); };
+  writeStr(0, 'RIFF'); view.setUint32(4, 36 + dataSize, true); writeStr(8, 'WAVE');
+  writeStr(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+  view.setUint16(22, numChannels, true); view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * blockAlign, true); view.setUint16(32, blockAlign, true);
+  view.setUint16(34, 16, true); writeStr(36, 'data'); view.setUint32(40, dataSize, true);
+  const channels = []; for(let ch=0; ch<numChannels; ch++) channels.push(buffer.getChannelData(ch));
+  let offset = 44;
+  for(let i=0; i<numFrames; i++){
+    for(let ch=0; ch<numChannels; ch++){
+      let s = Math.max(-1, Math.min(1, channels[ch][i]));
+      s = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      view.setInt16(offset, s, true); offset += 2;
+    }
+  }
+  return new Blob([arrBuf], { type: 'audio/wav' });
+}
+
 /* ---- Messages vocaux ---- */
 function dmMicOrSendTap(){
   const input = document.getElementById('dmChatInput');
@@ -7668,17 +7773,33 @@ async function dmStopRecording(send){
     if(dmState.recStream) dmState.recStream.getTracks().forEach(t=>t.stop());
     dmResetInputRow();
     if(!send || duration < 1) return;
-    const blob = new Blob(dmState.chunks, { type:'audio/webm' });
-    const path = `${sbUser.id}/${Date.now()}.webm`;
+    let blob = new Blob(dmState.chunks, { type:'audio/webm' });
+    let finalDuration = duration;
+    let ext = 'webm';
+    let contentType = 'audio/webm';
+    // AJOUT : Voice Transformer — voix féminine automatique sur les vocaux envoyés par un admin
+    if(state?.player?.isAdmin){
+      try{
+        const fx = await lcApplyFemaleVoiceEffect(blob);
+        blob = fx.blob;
+        finalDuration = Math.round(fx.duration) || duration;
+        ext = 'wav';
+        contentType = 'audio/wav';
+      }catch(e){
+        console.error('lcApplyFemaleVoiceEffect', e);
+        // en cas d'échec du traitement, on envoie l'audio original plutôt que de bloquer l'envoi
+      }
+    }
+    const path = `${sbUser.id}/${Date.now()}.${ext}`;
     // CORRECTIF (2026-09-10) : upload + insertion non protégés — même souci
     // "Failed to fetch" brut en cas de réseau instable pendant l'envoi.
     try{
-      const { error: upErr } = await sb.storage.from('dm-voice').upload(path, blob, { contentType:'audio/webm' });
+      const { error: upErr } = await sb.storage.from('dm-voice').upload(path, blob, { contentType });
       if(upErr) throw upErr;
       const { data: pub } = sb.storage.from('dm-voice').getPublicUrl(path);
       const { error: insErr } = await sb.from('dm_messages').insert({
         conversation_id: dmState.convId, sender_id: sbUser.id, receiver_id: dmState.otherUser.id,
-        type:'voice', audio_url: pub.publicUrl, audio_duration: duration
+        type:'voice', audio_url: pub.publicUrl, audio_duration: finalDuration
       });
       if(insErr) throw insErr;
     }catch(e){
