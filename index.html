@@ -4229,7 +4229,15 @@ window.addEventListener('error', function(e){
 });
 window.addEventListener('unhandledrejection', function(e){
   const reason = e.reason;
-  let msg = reason && reason.message ? reason.message : String(reason);
+  const msg = reason && reason.message ? reason.message : String(reason);
+  // Les erreurs réseau transitoires ne doivent jamais bloquer l'interface
+  // avec une alerte navigateur brute. Les flux appel/messagerie gèrent leurs
+  // propres erreurs et nettoient leur état.
+  if(/failed to fetch|networkerror|load failed/i.test(msg)){
+    e.preventDefault();
+    console.warn('[RÉSEAU] opération interrompue:', msg);
+    return;
+  }
   alert('[PROMESSE REJETÉE] ' + msg);
 });
 // ---------------------------------------------------------------------
