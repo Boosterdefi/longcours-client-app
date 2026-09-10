@@ -7192,12 +7192,6 @@ const dmState = {
   // AJOUT (2026-09-08) : état de la vidéo de bibliothèque admin diffusée
   // pendant un appel vidéo en cours (voir dmPlayAdminVideo / dmStopAdminVideo).
   adminVideoEl:null, adminVideoOriginalTrack:null, adminVideoPlaying:false, adminVideoCurrentId:null,
-  // AJOUT (2026-09-08) : effet "voix féminine" appliqué au micro d'un compte
-  // admin (voir dmCreateFemaleVoiceStream / dmMaybeApplyAdminVoiceEffect).
-  // rawLocalStream = flux micro/caméra brut (non transformé), conservé pour
-  // pouvoir couper proprement le micro à la fin de l'appel — dmState.localStream
-  // devient alors le flux transformé réellement envoyé à l'interlocuteur.
-  rawLocalStream:null, voiceEffect:null
 };
 
 // AJOUT (2026-09-08) : présence en ligne/hors ligne, via Supabase Realtime
@@ -7650,257 +7644,6 @@ async function dmGetLocalStream(type, opts){
   const constraints = (type==='video' && !skipCamera) ? { audio:true, video:{ facingMode:'user' } } : { audio:true };
   return await navigator.mediaDevices.getUserMedia(constraints);
 }
-// AJOUT (2026-09-08) : transformation de voix "féminine" pour les comptes
-// admin. Principe : on capture le micro normalement (dmGetLocalStream), puis
-// on fait passer la piste audio par un pitch-shifter temps réel (Web Audio
-// API, méthode granulaire avec fenêtrage de Hann/overlap-add) qui augmente la
-// hauteur du son sans en changer la vitesse — c'est ce flux transformé,
-// et non le micro brut, qui est ensuite envoyé à l'interlocuteur via
-// WebRTC. Aucune dépendance externe : tout tient dans ce navigateur.
-// Limite connue : createScriptProcessor est une API dépréciée mais encore
-// largement supportée partout (contrairement à AudioWorklet qui nécessite un
-// fichier séparé, impossible à charger depuis une page unique en file://).
-// Qualité : suffisante pour anonymiser/féminiser le timbre perçu, mais pas un
-// niveau "broadcast" — un pitch-shifter dédié (AudioWorklet + librairie) sera
-// préférable si une meilleure qualité est nécessaire plus tard.
-/*
- * STRICT RESEMBLE ADMIN VOICE — Abigail only.
- *
- * Fixed voice UUID: 91b49260
- * There is deliberately NO local pitch-shifter and NO raw-microphone fallback.
- * The browser captures the microphone only as an input to the Resemble gateway.
- * The outgoing WebRTC track is created exclusively from Resemble-converted audio.
- * If anything fails, this function throws and the call is blocked by the callers
- * already present in dmStartCall/dmHandleIncomingCall.
- */
-const RESEMBLE_ADMIN_VOICE_UUID = '91b49260';
-const RESEMBLE_ADMIN_GATEWAY = `${SUPABASE_URL}/functions/v1/resemble-voice-chunk`;
-
-function dmBase64ToArrayBuffer(base64){
-  if(typeof base64 !== 'string' || !base64) throw new Error('Réponse Resemble vide.');
-  const bin=atob(base64);
-  const out=new Uint8Array(bin.length);
-  for(let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i);
-  return out.buffer;
-}
-
-async function dmCreateResembleVoiceStream(rawStream){
-  if(RESEMBLE_ADMIN_VOICE_UUID !== '91b49260') throw new Error('Voix Abigail verrouillée: configuration invalide.');
-  if(!rawStream || rawStream.getAudioTracks().length !== 1) throw new Error('Piste micro admin invalide.');
-  const inputTrack=rawStream.getAudioTracks()[0];
-  if(inputTrack.readyState !== 'live') throw new Error('Micro admin non actif.');
-
-  const AudioCtx=window.AudioContext || window.webkitAudioContext;
-  if(!AudioCtx) throw new Error('Web Audio API indisponible: voix Abigail obligatoire.');
-
-  const ctx=new AudioCtx({sampleRate:48000});
-  if(ctx.state==='suspended') await ctx.resume().catch(()=>{ throw new Error('AudioContext Abigail indisponible.'); });
-
-  const dest=ctx.createMediaStreamDestination();
-  const outputTrack=dest.stream.getAudioTracks()[0];
-  if(!outputTrack || outputTrack.readyState!=='live') throw new Error('Piste Abigail indisponible.');
-
-  const source=ctx.createMediaStreamSource(new MediaStream([inputTrack]));
-  const processor=ctx.createScriptProcessor(4096,1,1);
-  const silentGain=ctx.createGain();
-  silentGain.gain.value=0;
-  source.connect(processor);
-  processor.connect(silentGain);
-  silentGain.connect(ctx.destination);
-
-  const state={
-    ctx,dest,source,processor,silentGain,outputTrack,inputTrack,
-    stopped:false,buffer:[],samples:0,sequence:0,
-    queue:Promise.resolve(),nextTime:ctx.currentTime+0.05,
-    firstReady:null,firstResolve:null,firstReject:null,
-    chunkSamples:Math.floor(ctx.sampleRate*1.2)
-  };
-
-  state.firstReady=new Promise((resolve,reject)=>{
-    state.firstResolve=resolve;
-    state.firstReject=reject;
-  });
-
-  const cleanup=()=>{
-    if(state.stopped) return;
-    state.stopped=true;
-    try{processor.disconnect();}catch(_e){}
-    try{source.disconnect();}catch(_e){}
-    try{silentGain.disconnect();}catch(_e){}
-    try{outputTrack.stop();}catch(_e){}
-    try{ctx.close();}catch(_e){}
-  };
-
-  const fail=(err)=>{
-    const e=err instanceof Error ? err : new Error(String(err));
-    if(!state.stopped){
-      console.error('RESEMBLE_ABIGAIL_FATAL',e);
-      cleanup();
-    }
-    try{state.firstReject?.(e);}catch(_e){}
-    throw e;
-  };
-
-  const encodeWav=(samples,sampleRate)=>{
-    const buffer=new ArrayBuffer(44+samples.length*2);
-    const view=new DataView(buffer);
-    const write=(offset,str)=>{for(let i=0;i<str.length;i++) view.setUint8(offset+i,str.charCodeAt(i));};
-    write(0,'RIFF'); view.setUint32(4,36+samples.length*2,true); write(8,'WAVE');
-    write(12,'fmt '); view.setUint32(16,16,true); view.setUint16(20,1,true);
-    view.setUint16(22,1,true); view.setUint32(24,sampleRate,true); view.setUint32(28,sampleRate*2,true);
-    view.setUint16(32,2,true); view.setUint16(34,16,true); write(36,'data'); view.setUint32(40,samples.length*2,true);
-    let o=44;
-    for(let i=0;i<samples.length;i++){
-      const s=Math.max(-1,Math.min(1,samples[i]));
-      view.setInt16(o,s<0?s*0x8000:s*0x7fff,true); o+=2;
-    }
-    return new Blob([buffer],{type:'audio/wav'});
-  };
-
-  const enqueuePcm=(samples)=>{
-    if(state.stopped || !samples?.length) return;
-    const copy=new Float32Array(samples.length);
-    copy.set(samples);
-    state.buffer.push(copy);
-    state.samples+=copy.length;
-
-    while(state.samples>=state.chunkSamples){
-      const chunk=new Float32Array(state.chunkSamples);
-      let offset=0;
-      while(offset<chunk.length && state.buffer.length){
-        const head=state.buffer[0];
-        const take=Math.min(head.length,chunk.length-offset);
-        chunk.set(head.subarray(0,take),offset);
-        offset+=take;
-        if(take===head.length) state.buffer.shift();
-        else state.buffer[0]=head.slice(take);
-      }
-      state.samples-=chunk.length;
-      const seq=state.sequence++;
-      const wav=encodeWav(chunk,ctx.sampleRate);
-      state.queue=state.queue.then(async()=>{
-        if(state.stopped) return;
-        const sessionResult=await sb.auth.getSession();
-        const token=sessionResult?.data?.session?.access_token;
-        if(!token) throw new Error('Session administrateur expirée.');
-        const res=await fetch(RESEMBLE_ADMIN_GATEWAY,{
-          method:'POST',
-          headers:{
-            'Authorization':`Bearer ${token}`,
-            'apikey':SUPABASE_ANON_KEY,
-            'Content-Type':'audio/wav',
-            'X-Voice-Sequence':String(seq)
-          },
-          body:wav
-        });
-        if(!res.ok){
-          let detail='';
-          try{detail=(await res.json())?.error||'';}catch(_e){}
-          throw new Error(`Resemble Abigail: HTTP ${res.status}${detail?` — ${detail}`:''}`);
-        }
-        const json=await res.json();
-        if(!json?.success || json.voice_uuid!==RESEMBLE_ADMIN_VOICE_UUID || !json.audio_content){
-          throw new Error('Resemble Abigail: réponse de conversion invalide.');
-        }
-        const audio=await ctx.decodeAudioData(dmBase64ToArrayBuffer(json.audio_content).slice(0));
-        if(!audio || !audio.length) throw new Error('Resemble Abigail: audio converti vide.');
-        if(state.stopped) return;
-        const node=ctx.createBufferSource();
-        node.buffer=audio;
-        node.connect(dest);
-        const now=ctx.currentTime;
-        const start=Math.max(now+0.02,state.nextTime);
-        state.nextTime=start+audio.duration;
-        node.start(start);
-        node.onended=()=>{try{node.disconnect();}catch(_e){}};
-        if(seq===0) state.firstResolve?.(true);
-      }).catch(err=>{
-        if(seq===0) state.firstReject?.(err);
-        cleanup();
-        console.error('RESEMBLE_ABIGAIL_FATAL',err);
-      });
-    }
-  };
-
-  processor.onaudioprocess=(event)=>{
-    if(state.stopped) return;
-    const input=event.inputBuffer.getChannelData(0);
-    enqueuePcm(input);
-  };
-
-  // Capture starts immediately, but nothing from the raw microphone is ever
-  // connected to the outgoing WebRTC stream. The call waits for the first
-  // converted Abigail block before it can proceed.
-  return {
-    stream:dest.stream,
-    ctx,
-    source,
-    node:null,
-    nodes:[],
-    inputTrack,
-    processor,
-    state,
-    firstReady,
-    stop:cleanup
-  };
-}
-
-// STRICT: admin calls never send the raw microphone. Only Abigail (91b49260)
-// may produce the outgoing audio track. Any Resemble failure blocks the call.
-
-async function dmMaybeApplyAdminVoiceEffect(){
-  await dmEnsureAdminStatusKnown();
-  if(!isAdminUser()) return;
-  if(!dmState.localStream) throw new Error('Flux local admin absent.');
-  dmStopAdminVoiceEffect();
-  const raw=dmState.localStream;
-  const effect=await dmCreateResembleVoiceStream(raw);
-  // CORRECTIF (2026-09-10) : effect.firstReady n'est écouté que par ce
-  // Promise.race. Si elle échoue APRÈS que le délai de 15s a déjà perdu la
-  // course (donc après que ce try/catch a déjà rendu la main), plus rien
-  // n'écoute son rejet : Promise.race ne "consomme" pas la promesse
-  // perdante, ce qui produisait une vraie fuite de rejet non géré (même
-  // symptôme "Failed to fetch" brut, indépendamment du bug CORS côté
-  // fonction Edge). On attache un .catch() silencieux séparé, dès sa
-  // création, pour que ce rejet tardif soit toujours "récupéré" — sans
-  // changer le comportement du Promise.race lui-même (une promesse peut
-  // avoir plusieurs consommateurs indépendants).
-  effect.firstReady.catch(()=>{});
-  try{
-    await Promise.race([
-      effect.firstReady,
-      new Promise((_,reject)=>setTimeout(()=>reject(new Error('Resemble Abigail: délai de conversion dépassé.')),15000))
-    ]);
-  }catch(err){
-    effect.stop?.();
-    throw err;
-  }
-  const audio=effect.stream.getAudioTracks();
-  if(audio.length!==1 || audio[0].readyState!=='live') throw new Error('Voix Abigail obligatoire indisponible.');
-  dmState.rawLocalStream=raw;
-  dmState.voiceEffect=effect;
-  const videoTracks=raw.getVideoTracks();
-  dmState.localStream=new MediaStream([...audio,...videoTracks]);
-  if(dmState.localStream.getAudioTracks()[0]===raw.getAudioTracks()[0]){
-    dmStopAdminVoiceEffect();
-    throw new Error('Sécurité voix: piste micro originale détectée.');
-  }
-}
-
-function dmStopAdminVoiceEffect(){
-  if(dmState.voiceEffect){
-    const e=dmState.voiceEffect;
-    try{e.stop?.();}catch(_e){}
-    try{if(e.state) e.state.stopped=true;}catch(_e){}
-    try{if(e.outputTrack) e.outputTrack.stop();}catch(_e){}
-    try{if(e.ctx) e.ctx.close();}catch(_e){}
-    dmState.voiceEffect=null;
-  }
-  if(dmState.rawLocalStream){
-    dmState.rawLocalStream.getTracks().forEach(t=>t.stop());
-    dmState.rawLocalStream=null;
-  }
-}
 function dmPlayRemoteAudioFallback(stream){
   if(!dmHiddenAudioEl){ dmHiddenAudioEl = new Audio(); dmHiddenAudioEl.autoplay = true; }
   dmHiddenAudioEl.srcObject = stream;
@@ -8160,9 +7903,6 @@ async function dmStartCall(type){
     if(forcedAdminVideo) forcedAdminVideo.el.remove();
     return;
   }
-  // AJOUT (2026-09-08) : si CE compte (l'appelant) est admin, sa voix est
-  // transformée avant d'être envoyée — voir dmMaybeApplyAdminVoiceEffect.
-  try{ await dmMaybeApplyAdminVoiceEffect(); }catch(e){ showToast('Voix féminine indisponible — appel bloqué','⚠️'); if(dmState.localStream) dmState.localStream.getTracks().forEach(t=>t.stop()); dmStopAdminVoiceEffect(); if(forcedAdminVideo) forcedAdminVideo.el.remove(); dmState.localStream=null; return; }
   if(forcedAdminVideo){
     // La caméra n'a jamais été capturée (skipCamera) : on associe la piste
     // audio (brute ou déjà transformée) à la piste vidéo de la bibliothèque.
@@ -8191,7 +7931,6 @@ async function dmStartCall(type){
     if(insErr || !callRow){
       showToast('Appel impossible', '&#x26a0;&#xfe0f;');
       dmState.localStream.getTracks().forEach(t=>t.stop());
-      dmStopAdminVoiceEffect();
       if(dmState.adminVideoEl){ dmState.adminVideoEl.pause(); dmState.adminVideoEl.remove(); dmState.adminVideoEl=null; dmState.adminVideoPlaying=false; dmState.adminVideoCurrentId=null; }
       return;
     }
@@ -8315,9 +8054,6 @@ async function dmAcceptCall(){
     dmDeclineCall();
     return;
   }
-  // AJOUT (2026-09-08) : si CE compte (celui qui décroche) est admin, sa voix
-  // est transformée avant d'être envoyée — voir dmMaybeApplyAdminVoiceEffect.
-  try{ await dmMaybeApplyAdminVoiceEffect(); }catch(e){ showToast('Voix féminine indisponible — appel bloqué','⚠️'); if(dmState.localStream) dmState.localStream.getTracks().forEach(t=>t.stop()); dmStopAdminVoiceEffect(); if(forcedAdminVideo) forcedAdminVideo.el.remove(); dmState.localStream=null; return; }
   if(forcedAdminVideo){
     dmState.localStream = new MediaStream([...dmState.localStream.getAudioTracks(), forcedAdminVideo.track]);
     dmState.adminVideoEl = forcedAdminVideo.el;
@@ -8373,9 +8109,6 @@ function dmTeardownCall(){
   dmStopAdminVideo();
   if(dmState.pc){ if(dmState.pc._recoveryTimer) clearTimeout(dmState.pc._recoveryTimer); dmState.pc.close(); dmState.pc = null; }
   if(dmState.localStream){ dmState.localStream.getTracks().forEach(t=>t.stop()); dmState.localStream = null; }
-  // AJOUT (2026-09-08) : coupe le pitch-shifter "voix féminine" (s'il était
-  // actif) et libère le micro brut sous-jacent — voir dmMaybeApplyAdminVoiceEffect.
-  dmStopAdminVoiceEffect();
   if(dmState.callChannel){ sb.removeChannel(dmState.callChannel); dmState.callChannel = null; }
   if(dmHiddenAudioEl) dmHiddenAudioEl.srcObject = null;
   const overlay = document.getElementById('dmCallOverlay');
