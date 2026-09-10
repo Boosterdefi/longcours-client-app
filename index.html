@@ -8136,37 +8136,54 @@ async function dmStartCall(type){
     dmState.adminVideoOriginalTrack = null; // pas de vraie caméra à restaurer
   }
   dmState.isCaller = true; dmState.iceCallerLen = 0; dmState.iceCalleeLen = 0;
-  const { data: callRow, error: insErr } = await sb.from('dm_calls').insert({
-    conversation_id: dmState.convId, caller_id: sbUser.id, callee_id: dmState.callPeer.id, call_type: type
-  }).select().single();
-  if(insErr || !callRow){
-    showToast('Appel impossible', '&#x26a0;&#xfe0f;');
-    dmState.localStream.getTracks().forEach(t=>t.stop());
-    dmStopAdminVoiceEffect();
-    if(dmState.adminVideoEl){ dmState.adminVideoEl.pause(); dmState.adminVideoEl.remove(); dmState.adminVideoEl=null; dmState.adminVideoPlaying=false; dmState.adminVideoCurrentId=null; }
-    return;
-  }
-  dmState.currentCall = callRow;
-  const iceServers = await dmGetIceServers();
-  const pc = dmSetupPeerConnection(callRow.id, true, iceServers);
-  dmState.pc = pc;
-  dmState.localStream.getTracks().forEach(t=>pc.addTrack(t, dmState.localStream));
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  await sb.from('dm_calls').update({ sdp_offer: offer }).eq('id', callRow.id);
-  dmShowCallUI(type);
-  document.getElementById('dmCallStatus').textContent = 'Appel en cours…';
-  dmSubscribeCallUpdates(callRow.id, true);
-  // Sonnerie côté appelant tant que ça sonne, + on abandonne automatiquement
-  // au bout de 45s si personne ne répond (au lieu de sonner indéfiniment).
-  dmStartRingtone();
-  dmState.ringTimeout = setTimeout(()=>{
-    if(dmState.currentCall && dmState.currentCall.id===callRow.id){
-      showToast('Pas de réponse', '&#x1f4f4;');
-      sb.from('dm_calls').update({ status:'missed' }).eq('id', callRow.id).then(undefined, ()=>{});
-      dmTeardownCall();
+  // CORRECTIF (2026-09-10) : tout ce bloc (insertion dm_calls, création de
+  // l'offre WebRTC, mise à jour dm_calls) partait auparavant sans try/catch.
+  // En cas de réseau instable/coupé pile à cet instant, le fetch Supabase
+  // échouait avec "Failed to fetch" et remontait, non intercepté, jusqu'au
+  // gestionnaire global (window.addEventListener('unhandledrejection', ...))
+  // qui affichait alors l'alerte brute "[PROMESSE REJETÉE] Failed to fetch"
+  // au lieu d'un message compréhensible — et l'appel restait bloqué dans un
+  // état à moitié initialisé (micro/caméra déjà pris). On capture maintenant
+  // toute erreur de ce bloc pour afficher un toast clair et tout nettoyer
+  // proprement via dmTeardownCall (relâche micro/caméra, ferme la connexion
+  // WebRTC si elle avait déjà été créée, referme l'overlay d'appel, etc.).
+  try{
+    const { data: callRow, error: insErr } = await sb.from('dm_calls').insert({
+      conversation_id: dmState.convId, caller_id: sbUser.id, callee_id: dmState.callPeer.id, call_type: type
+    }).select().single();
+    if(insErr || !callRow){
+      showToast('Appel impossible', '&#x26a0;&#xfe0f;');
+      dmState.localStream.getTracks().forEach(t=>t.stop());
+      dmStopAdminVoiceEffect();
+      if(dmState.adminVideoEl){ dmState.adminVideoEl.pause(); dmState.adminVideoEl.remove(); dmState.adminVideoEl=null; dmState.adminVideoPlaying=false; dmState.adminVideoCurrentId=null; }
+      return;
     }
-  }, 45000);
+    dmState.currentCall = callRow;
+    const iceServers = await dmGetIceServers();
+    const pc = dmSetupPeerConnection(callRow.id, true, iceServers);
+    dmState.pc = pc;
+    dmState.localStream.getTracks().forEach(t=>pc.addTrack(t, dmState.localStream));
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    await sb.from('dm_calls').update({ sdp_offer: offer }).eq('id', callRow.id);
+    dmShowCallUI(type);
+    document.getElementById('dmCallStatus').textContent = 'Appel en cours…';
+    dmSubscribeCallUpdates(callRow.id, true);
+    // Sonnerie côté appelant tant que ça sonne, + on abandonne automatiquement
+    // au bout de 45s si personne ne répond (au lieu de sonner indéfiniment).
+    dmStartRingtone();
+    dmState.ringTimeout = setTimeout(()=>{
+      if(dmState.currentCall && dmState.currentCall.id===callRow.id){
+        showToast('Pas de réponse', '&#x1f4f4;');
+        sb.from('dm_calls').update({ status:'missed' }).eq('id', callRow.id).then(undefined, ()=>{});
+        dmTeardownCall();
+      }
+    }, 45000);
+  }catch(e){
+    console.error('dmStartCall', e);
+    showToast('Appel impossible, vérifie ta connexion', '&#x26a0;&#xfe0f;');
+    dmTeardownCall();
+  }
 }
 function dmHandleIncomingCall(callRow){
   if(dmState.currentCall){ sb.from('dm_calls').update({ status:'missed' }).eq('id', callRow.id).then(undefined, ()=>{}); return; }
