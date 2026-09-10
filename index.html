@@ -3,6 +3,32 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<!-- CORRECTIF (2026-09-10) : hauteur réelle de l'écran, calculée en JS.
+     Sur certains navigateurs/WebView mobiles (notamment Android/Huawei),
+     100vh et 100dvh sont parfois calculés PLUS GRANDS que la zone
+     réellement visible à l'écran. Résultat visible pour l'utilisateur :
+     le cadre .phone/.stage dépasse l'écran réel, tout ce qui est ancré
+     "en bas" (clavier du PIN, barre de navigation en bas) est poussé
+     hors champ et coupé, alors qu'un espace vide apparaît en haut.
+     On mesure donc ici la hauteur réellement visible (visualViewport si
+     disponible) et on la publie comme variable CSS --app-vh, utilisée à
+     la place de vh/dvh pour .stage/.phone (voir feuille de style
+     "real-viewport-height-fix" plus bas). Se met à jour au resize, au
+     changement d'orientation, et à l'apparition/disparition du clavier. -->
+<script>
+(function(){
+  function setAppVh(){
+    var h = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+    document.documentElement.style.setProperty('--app-vh', h + 'px');
+  }
+  setAppVh();
+  window.addEventListener('resize', setAppVh);
+  window.addEventListener('orientationchange', setAppVh);
+  if(window.visualViewport){
+    window.visualViewport.addEventListener('resize', setAppVh);
+  }
+})();
+</script>
 <title>Longcours</title>
 <link rel="manifest" href="manifest.json?v=3">
 <meta name="theme-color" content="#D97706">
@@ -785,7 +811,7 @@
   .splash-actions{display:flex;flex-direction:column;gap:10px;width:100%;margin-top:8px;}
 
   /* ---------- Auth ---------- */
-  .auth-wrap{padding:26px 24px;display:flex;flex-direction:column;height:100%;}
+  .auth-wrap{padding:26px 24px calc(16px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;height:100%;box-sizing:border-box;}
   .step-dots{display:flex;gap:6px;margin-bottom:18px;}
   .step-dot{width:26px;height:6px;border-radius:99px;background:#F1DFB8;}
   .step-dot.done{background:var(--green);}
@@ -3085,6 +3111,36 @@ button,input,textarea,select{max-width:100%;}
 
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;scroll-behavior:auto !important;transition-duration:.01ms !important;}
+}
+</style>
+
+
+<style id="real-viewport-height-fix">
+/* CORRECTIF (2026-09-10) : voir le commentaire dans <head> à côté du script
+   qui calcule --app-vh. On force ici .stage/.phone (et donc .app, qui est
+   à 100% de .phone) à utiliser la vraie hauteur mesurée en JS plutôt que
+   100vh/100dvh, sur toutes les largeurs mobiles où ces éléments passent en
+   plein écran. Fallback sur 100dvh puis 100vh si --app-vh n'est pas encore
+   posée (avant l'exécution du script, cas très rare/JS désactivé). */
+:root{ --app-vh: 100dvh; }
+@media (max-width:600px){
+  html,body{ height:var(--app-vh); }
+  .stage{
+    height:var(--app-vh) !important;
+    min-height:var(--app-vh) !important;
+    max-height:var(--app-vh) !important;
+  }
+  .phone{
+    height:var(--app-vh) !important;
+    max-height:var(--app-vh) !important;
+  }
+}
+@media (max-height:600px) and (orientation:landscape){
+  .stage,.phone{
+    height:var(--app-vh) !important;
+    min-height:var(--app-vh) !important;
+    max-height:var(--app-vh) !important;
+  }
 }
 </style>
 
