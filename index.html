@@ -385,7 +385,9 @@
   .dm-avatar.online::after{
     content:''; position:absolute; right:-1px; bottom:-1px; width:11px; height:11px;
     border-radius:50%; background:#2ECC71; border:2px solid var(--dm-surface);
+    box-shadow:0 0 0 0 rgba(46,204,113,.55); animation:dmOnlinePulse 2s infinite;
   }
+  @keyframes dmOnlinePulse{ 0%{ box-shadow:0 0 0 0 rgba(46,204,113,.5); } 70%{ box-shadow:0 0 0 6px rgba(46,204,113,0); } 100%{ box-shadow:0 0 0 0 rgba(46,204,113,0); } }
   .dm-chat-header .dm-avatar.online::after{ width:10px; height:10px; }
   .dm-user-row .nm{ font-weight:700; font-size:13.5px; }
   .dm-user-row .em{ font-size:11.5px; color:var(--ink-soft); }
@@ -394,13 +396,20 @@
   .dm-conv-row .sub{ font-size:11.5px; color:var(--ink-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:200px; }
   .dm-conv-time{ margin-left:auto; font-size:10.5px; color:var(--ink-soft); flex-shrink:0; }
   .dm-conv-unread{ margin-left:6px; background:var(--red); color:#fff; border-radius:10px; font-size:10px; padding:2px 6px; flex-shrink:0; }
-  .dm-empty{ text-align:center; color:var(--ink-soft); font-size:12.5px; padding:30px 20px; }
+  .dm-empty{ text-align:center; color:var(--ink-soft); font-size:12.5px; padding:30px 20px; line-height:1.6; }
 
   .dm-chat-overlay{ position:fixed; inset:0; background:var(--dm-bg); z-index:210; display:none; flex-direction:column; font-family:'Nunito',sans-serif; color:var(--dm-text); }
   .dm-chat-overlay.open{ display:flex; }
   .dm-chat-header{ display:flex; align-items:center; gap:12px; padding:14px; border-bottom:1px solid var(--dm-border); background:var(--dm-surface); flex-shrink:0; }
-  .dm-chat-header button{ background:none; border:none; color:var(--dm-text); cursor:pointer; padding:6px; font-size:19px; }
+  .dm-chat-header button{ background:none; border:none; color:var(--dm-text); cursor:pointer; padding:6px; font-size:19px; transition:transform .1s; }
+  .dm-chat-header button:active{ transform:scale(.82); }
   .dm-chat-header button:disabled{ opacity:.35; cursor:not-allowed; }
+  /* AJOUT (2026-09-11) : retour visuel immédiat au clic sur les boutons appel
+     audio/vidéo — avant, rien ne se voyait pendant l'obtention du micro/
+     caméra et l'insertion en base (dmStartCall), qui peuvent prendre un
+     instant, donnant l'impression que le bouton ne réagissait pas. */
+  .dm-chat-header button.connecting{ animation:dmCallBtnPulse .8s ease-in-out infinite; }
+  @keyframes dmCallBtnPulse{ 0%,100%{ opacity:1; transform:scale(1); } 50%{ opacity:.55; transform:scale(.88); } }
   .dm-chat-header .dm-avatar{ width:38px; height:38px; font-size:13px; }
   .dm-chat-title{ flex:1; min-width:0; }
   .dm-chat-title .nm{ font-size:15px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -413,10 +422,11 @@
       radial-gradient(circle at 92% 82%, rgba(108,92,232,.05) 0, transparent 40%),
       repeating-linear-gradient(135deg, rgba(255,255,255,.015) 0 2px, transparent 2px 26px);
   }
-  .dm-bubble-wrap{ max-width:78%; display:flex; flex-direction:column; margin:3px 0; position:relative; }
+  .dm-bubble-wrap{ max-width:78%; display:flex; flex-direction:column; margin:3px 0; position:relative; animation:dmBubbleIn .22s ease; }
+  @keyframes dmBubbleIn{ from{ opacity:0; transform:translateY(6px) scale(.98); } to{ opacity:1; transform:none; } }
   .dm-bubble-wrap.out{ align-self:flex-end; }
   .dm-bubble-wrap.in{ align-self:flex-start; }
-  .dm-bubble{ padding:8px 13px; border-radius:15px; font-size:14.5px; line-height:1.4; word-break:break-word; box-shadow:0 1px 1px rgba(0,0,0,.15); position:relative; white-space:pre-wrap; }
+  .dm-bubble{ padding:8px 13px; border-radius:15px; font-size:14.5px; line-height:1.4; word-break:break-word; overflow-wrap:anywhere; box-shadow:0 1px 1px rgba(0,0,0,.15); position:relative; white-space:pre-wrap; }
   .dm-bubble.out{ background:var(--dm-out); color:var(--dm-out-text); border-bottom-right-radius:3px; }
   .dm-bubble.in{ background:var(--dm-in); color:var(--dm-in-text); border-bottom-left-radius:3px; }
   /* Petite "queue" de bulle façon WhatsApp, uniquement sur le premier message d'un groupe */
@@ -440,11 +450,14 @@
   .dm-voice-progress > i{ display:block; height:100%; width:0; border-radius:99px; background:currentColor; opacity:.9; transition:width .08s linear; }
   .dm-voice-times{ display:flex; justify-content:space-between; gap:6px; margin-top:4px; font-size:9px; opacity:.72; }
   .dm-voice-dur{ font-size:11px; flex-shrink:0; min-width:30px; text-align:right; opacity:.8; }
-  .dm-msg-actions{ display:flex; gap:4px; margin-left:5px; opacity:0; transition:opacity .15s; }
-  .dm-bubble-wrap:hover .dm-msg-actions,.dm-bubble-wrap:focus-within .dm-msg-actions{ opacity:1; }
+  .dm-msg-actions{ display:flex; gap:4px; margin-left:5px; opacity:0; transform:scale(.85); transition:opacity .15s, transform .15s; pointer-events:none; }
+  .dm-bubble-wrap:hover .dm-msg-actions,.dm-bubble-wrap:focus-within .dm-msg-actions,.dm-bubble-wrap.show-actions .dm-msg-actions{ opacity:1; transform:scale(1); pointer-events:auto; }
   .dm-msg-delete{ border:0; background:rgba(255,93,108,.12); color:#ff8a96; width:24px; height:24px; border-radius:50%; cursor:pointer; font-size:12px; }
   .dm-msg-status{ font-size:10px; opacity:.72; }
-  @media(max-width:600px){ .dm-msg-actions{ opacity:1; } }
+  /* CORRECTIF (2026-09-11) : la corbeille de suppression restait affichée en
+     permanence sur mobile (règle @media forçant opacity:1). Elle n'apparaît
+     désormais que via un appui long (voir dmBindLongPressActions), comme sur
+     WhatsApp/Messenger, pour ne pas polluer visuellement chaque message. */
 
   /* Bulles image / fichier (2026-09-07) */
   .dm-image-bubble{ padding:4px !important; overflow:hidden; }
@@ -460,6 +473,20 @@
   @keyframes dmSpin{ to{ transform:rotate(360deg); } }
 
   .dm-day-sep{ align-self:center; background:rgba(255,255,255,.06); color:var(--dm-muted); font-size:11px; font-weight:700; padding:4px 12px; border-radius:10px; margin:10px 0; }
+  /* AJOUT (2026-09-11) : indicateur "en train d'écrire…" (voir dmShowTypingIndicator) */
+  .dm-typing-row{ display:none; padding:2px 14px 8px; flex-shrink:0; }
+  .dm-typing-dots{ display:inline-flex; align-items:center; gap:4px; background:var(--dm-in); padding:9px 13px; border-radius:14px; border-bottom-left-radius:3px; }
+  .dm-typing-dots i{ width:6px; height:6px; border-radius:50%; background:var(--dm-muted); display:inline-block; animation:dmTypingBounce 1.1s infinite ease-in-out; }
+  .dm-typing-dots i:nth-child(2){ animation-delay:.15s; }
+  .dm-typing-dots i:nth-child(3){ animation-delay:.3s; }
+  @keyframes dmTypingBounce{ 0%,60%,100%{ transform:translateY(0); opacity:.4; } 30%{ transform:translateY(-4px); opacity:1; } }
+  /* AJOUT (2026-09-11) : historique d'appels affiché dans le fil (voir
+     dmAppendCallLog) — pastille centrée façon WhatsApp, tapotable pour rappeler. */
+  .dm-call-log-wrap{ align-self:center; margin:6px 0; }
+  .dm-call-log{ display:flex; align-items:center; gap:8px; border:0; cursor:pointer; background:rgba(255,255,255,.07); color:var(--dm-muted); padding:7px 14px; border-radius:999px; font-size:12.5px; font-weight:600; transition:transform .1s, background .15s; }
+  .dm-call-log:active{ transform:scale(.96); }
+  .dm-call-log.missed{ background:rgba(255,93,108,.14); color:#ff8a96; }
+  .dm-call-log-time{ opacity:.75; font-size:11px; margin-left:2px; }
 
   .dm-online-dot{ position:absolute; width:10px; height:10px; border-radius:50%; background:var(--dm-online); border:2px solid var(--dm-surface); bottom:0; right:0; display:none; }
   .dm-chat-header .dm-avatar{ position:relative; }
@@ -4086,6 +4113,9 @@ button,input,textarea,select{max-width:100%;}
       <button id="dmVideoCallBtn" onclick="dmStartCall('video')" aria-label="Appel vidéo">&#x1f4f9;</button>
     </div>
     <div class="dm-chat-messages" id="dmChatMessages"></div>
+    <div class="dm-typing-row" id="dmTypingRow" style="display:none;">
+      <span class="dm-typing-dots"><i></i><i></i><i></i></span>
+    </div>
     <input type="file" id="dmFileInput" style="display:none" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip" onchange="dmOnFilePicked(event)">
     <div class="dm-chat-input-row" id="dmChatInputRow">
       <div class="dm-emoji-picker" id="dmEmojiPicker" style="display:none;"></div>
@@ -4380,6 +4410,23 @@ async function dmEnsureAdminStatusKnown(){
   if(window.dmPlayerDataPromise){
     try{ await Promise.race([window.dmPlayerDataPromise, new Promise(r=>setTimeout(r,4000))]); }catch(e){}
   }
+}
+// AJOUT (2026-09-11) : blocage des appels audio/vidéo par compte, décidé côté
+// admin (voir adminToggleCallsBlocked dans l'espace admin). Ne bloque QUE les
+// appels (audio + vidéo) — messages texte, images, fichiers et messages
+// vocaux restent toujours autorisés, comme demandé.
+// Table Supabase attendue : colonne booléenne sur profiles, à créer si absente :
+//   ALTER TABLE profiles ADD COLUMN IF NOT EXISTS calls_blocked boolean DEFAULT false;
+// Vérifiée à chaque tentative d'appel (pas de mise en cache) afin qu'un
+// blocage décidé par l'admin s'applique immédiatement, y compris sur une
+// session déjà ouverte.
+async function dmCallsBlockedForSelf(){
+  if(!sbUser) return false;
+  try{
+    const { data, error } = await sb.from('profiles').select('calls_blocked').eq('id', sbUser.id).maybeSingle();
+    if(error) return false; // colonne pas encore créée / réseau indisponible : on n'empêche jamais un appel par erreur
+    return !!(data && data.calls_blocked);
+  }catch(e){ return false; }
 }
 // BUGFIX (2026-08-27) : si cette page est ouverte directement depuis un
 // fichier local (content://, file://) plutôt que depuis le site Longcours en
@@ -7231,6 +7278,9 @@ const dmState = {
   // pendant un appel vidéo en cours (voir dmPlayAdminVideo / dmStopAdminVideo).
   adminVideoEl:null, adminVideoOriginalTrack:null, adminVideoPlaying:false, adminVideoCurrentId:null,
   callRemoteStream:null, callRecorder:null, callRecordChunks:[], callRecordCanvas:null, callRecordCtx:null, callRecordAnim:null, callRecordAudioCtx:null, callRecordAudioDest:null, callRecordPath:null, callRecordingStartedAt:null,
+  // AJOUT (2026-09-11) : horodatage du décroché, pour calculer la durée de
+  // l'appel affichée dans l'historique (voir dmLogCallEnd).
+  callAcceptedAt:null, callConnecting:false,
 };
 
 // AJOUT (2026-09-08) : présence en ligne/hors ligne, via Supabase Realtime
@@ -7323,7 +7373,7 @@ async function dmRenderConvList(){
   if(error){ box.innerHTML = `<div class="dm-empty">Erreur de chargement.</div>`; return; }
   dmState.lastConvList = data || [];
   if(!data || !data.length){
-    box.innerHTML = `<div class="dm-empty">Aucune conversation pour l’instant.<br>Cherche un utilisateur ci-dessus pour démarrer.</div>`;
+    box.innerHTML = `<div class="dm-empty"><div style="font-size:32px;margin-bottom:6px;">💬</div><b>Pas encore de discussion</b><br>Cherche un proche ci-dessus pour lui écrire ou l'appeler.</div>`;
     return;
   }
   box.innerHTML = data.map((c,i)=>{
@@ -7358,6 +7408,7 @@ async function dmPollBadge(){
 /* ---- Fil de discussion ---- */
 async function dmOpenChat(convId, otherId, otherName, otherAvatarUrl){
   dmCleanupChatChannel();
+  dmHideTypingIndicator();
   dmState.convId = convId;
   dmState.otherUser = { id: otherId, name: otherName, avatarUrl: otherAvatarUrl || null };
   dmState.lastRenderedSenderId = null;
@@ -7370,10 +7421,12 @@ async function dmOpenChat(convId, otherId, otherName, otherAvatarUrl){
   document.getElementById('dmChatStatus').textContent = dmOnlineUserIds.has(otherId) ? 'En ligne' : '';
   document.getElementById('dmChatAvatar').classList.toggle('online', dmOnlineUserIds.has(otherId));
   document.getElementById('dmChatOverlay').classList.add('open');
+  dmBindLongPressActions();
   await dmLoadMessages();
   sb.rpc('dm_mark_read', { conv_id: convId }).then(undefined, ()=>{});
   dmState.msgChannel = sb.channel('dm_messages_'+convId)
     .on('postgres_changes', { event:'INSERT', schema:'public', table:'dm_messages', filter:`conversation_id=eq.${convId}` }, (payload)=>{
+      dmHideTypingIndicator();
       dmAppendMessage(payload.new, true);
       if(payload.new.receiver_id === sbUser.id) sb.rpc('dm_mark_read', { conv_id: convId }).then(undefined, ()=>{});
     })
@@ -7387,15 +7440,55 @@ async function dmOpenChat(convId, otherId, otherName, otherAvatarUrl){
       const id=payload.old && payload.old.id; const el=dmState.msgEls&&dmState.msgEls[id];
       if(el) el.remove(); if(id && dmState.msgEls) delete dmState.msgEls[id];
     })
+    // AJOUT (2026-09-11) : indicateur "en train d'écrire…" en direct — via un
+    // simple broadcast Realtime (aucune table/colonne Supabase nécessaire),
+    // envoyé par dmBindTypingBroadcast pendant la saisie côté correspondant.
+    .on('broadcast', { event:'typing' }, (msg)=>{
+      if(msg && msg.payload && msg.payload.from && msg.payload.from !== sbUser.id) dmShowTypingIndicator();
+    })
     .subscribe();
+  dmBindTypingBroadcast();
 }
 function dmCloseChat(){
   document.getElementById('dmChatOverlay').classList.remove('open');
   dmCleanupChatChannel();
+  dmHideTypingIndicator();
   dmState.convId = null; dmState.otherUser = null;
   const picker = document.getElementById('dmEmojiPicker');
   if(picker) picker.style.display = 'none';
   dmRenderConvList();
+}
+// AJOUT (2026-09-11) : indicateur "en train d'écrire…" — voir handler
+// broadcast 'typing' dans dmOpenChat. dmShowTypingIndicator se répète tant
+// que des événements arrivent et se cache automatiquement 2.5s après le
+// dernier (au cas où le correspondant arrête de taper sans envoyer).
+let dmTypingHideTimer = null;
+function dmShowTypingIndicator(){
+  const row = document.getElementById('dmTypingRow');
+  if(!row) return;
+  row.style.display = 'flex';
+  const box = document.getElementById('dmChatMessages');
+  if(box) box.scrollTop = box.scrollHeight;
+  if(dmTypingHideTimer) clearTimeout(dmTypingHideTimer);
+  dmTypingHideTimer = setTimeout(dmHideTypingIndicator, 2500);
+}
+function dmHideTypingIndicator(){
+  const row = document.getElementById('dmTypingRow');
+  if(row) row.style.display = 'none';
+  if(dmTypingHideTimer){ clearTimeout(dmTypingHideTimer); dmTypingHideTimer = null; }
+}
+function dmBindTypingBroadcast(){
+  const input = document.getElementById('dmChatInput');
+  if(!input || input.dataset.typingBound) return;
+  input.dataset.typingBound = '1';
+  let lastSent = 0;
+  input.addEventListener('input', ()=>{
+    if(!dmState.msgChannel) return;
+    const now = Date.now();
+    if(now - lastSent < 1800) return; // évite de spammer le canal à chaque frappe
+    lastSent = now;
+    dmState.msgChannel.send({ type:'broadcast', event:'typing', payload:{ from: sbUser.id } });
+  });
 }
 function dmCleanupChatChannel(){
   if(dmState.msgChannel){ sb.removeChannel(dmState.msgChannel); dmState.msgChannel = null; }
@@ -7411,17 +7504,125 @@ async function dmLoadMessages(){
   // protégée — un réseau instable au moment précis de l'ouverture du fil
   // provoquait le même "Failed to fetch" brut via l'alerte globale.
   try{
-    const { data, error } = await sb.from('dm_messages').select('*')
+    const msgsPromise = sb.from('dm_messages').select('*')
       .eq('conversation_id', dmState.convId).order('created_at', { ascending:true }).limit(300);
+    // AJOUT (2026-09-11) : historique des appels (reçus/manqués/terminés)
+    // affiché dans le fil au même titre que les messages — voir
+    // dmAppendCallLog. Requête volontairement best-effort (.catch local) :
+    // si duration_seconds n'existe pas encore côté Supabase (voir note sur
+    // dm_calls plus bas), on affiche quand même l'historique sans la durée
+    // plutôt que de bloquer le chargement de toute la conversation.
+    const callsPromise = sb.from('dm_calls').select('*')
+      .eq('conversation_id', dmState.convId).in('status', ['ended','missed','declined'])
+      .order('created_at', { ascending:true }).limit(200)
+      .then(r=>r, ()=>({ data:[], error:null }));
+    const [{ data, error }, callsRes] = await Promise.all([msgsPromise, callsPromise]);
     if(error) throw error;
-    (data||[]).forEach(m=>dmAppendMessage(m, false));
+    const calls = (callsRes && callsRes.data) || [];
+    const items = [
+      ...(data||[]).map(m=>({ at:m.created_at, render:()=>dmAppendMessage(m, false) })),
+      ...calls.map(c=>({ at:c.created_at, render:()=>dmAppendCallLog(c, false) })),
+    ].sort((a,b)=> new Date(a.at) - new Date(b.at));
+    items.forEach(it=>it.render());
     box.scrollTop = box.scrollHeight;
   }catch(e){
     console.error('dmLoadMessages', e);
     showToast('Messages indisponibles, vérifie ta connexion', '&#x26a0;&#xfe0f;');
   }
 }
+/* ---- Historique d'appels dans le fil de discussion ----
+   Table Supabase attendue (dm_calls) : colonne duration_seconds integer déjà
+   présente idéalement. Si absente, exécuter côté Supabase :
+     ALTER TABLE dm_calls ADD COLUMN IF NOT EXISTS duration_seconds integer;
+   Sans cette colonne, l'historique s'affiche quand même (type + statut) mais
+   sans la durée, et la tentative d'enregistrement de la durée (dmLogCallEnd)
+   échoue silencieusement (best-effort, comme le reste du fichier). */
+function dmCallLogIcon(type){ return type==='video' ? '&#x1f4f9;' : '&#x1f4de;'; }
+function dmCallLogText(row){
+  const out = row.caller_id === sbUser.id;
+  const typeLabel = row.call_type==='video' ? 'Appel vidéo' : 'Appel vocal';
+  const arrow = out ? '&#8599;&#65039; ' : '&#8601;&#65039; ';
+  if(row.status==='missed') return arrow + typeLabel + (out ? ' — sans réponse' : ' manqué');
+  if(row.status==='declined') return arrow + typeLabel + ' refusé';
+  const d = row.duration_seconds;
+  return arrow + typeLabel + (d!=null ? ' — ' + dmVoiceTime(d) : '');
+}
+function dmAppendCallLog(row, scroll){
+  const box = document.getElementById('dmChatMessages');
+  if(!box) return;
+  const createdDate = new Date(row.created_at || Date.now());
+  const time = createdDate.toLocaleTimeString(fmtLocale(), {hour:'2-digit', minute:'2-digit'});
+  const dayKey = dmDayKey(createdDate);
+  if(dayKey !== dmState.lastRenderedDayKey){
+    const sep = document.createElement('div');
+    sep.className = 'dm-day-sep';
+    sep.textContent = dmDaySeparatorLabel(createdDate);
+    box.appendChild(sep);
+    dmState.lastRenderedDayKey = dayKey;
+  }
+  dmState.lastRenderedSenderId = null; // un repère d'appel casse le regroupement de bulles voisines
+  const missed = row.status==='missed' || row.status==='declined';
+  const wrap = document.createElement('div');
+  wrap.className = 'dm-call-log-wrap';
+  wrap.innerHTML = `<button class="dm-call-log${missed?' missed':''}" onclick="dmStartCall('${esc(row.call_type)}')" title="Rappeler">
+      <span class="dm-call-log-ic">${dmCallLogIcon(row.call_type)}</span>
+      <span class="dm-call-log-txt">${esc(dmCallLogText(row))}</span>
+      <span class="dm-call-log-time">${time}</span>
+    </button>`;
+  box.appendChild(wrap);
+  if(scroll !== false) box.scrollTop = box.scrollHeight;
+}
+// AJOUT (2026-09-11) : appelé depuis dmTeardownCall avec le statut final de
+// l'appel qui vient de se terminer — calcule la durée (si l'appel a été
+// décroché, via dmState.callAcceptedAt), tente de la sauvegarder en base, et
+// ajoute la ligne d'historique dans le fil si cette conversation est celle
+// actuellement ouverte à l'écran.
+function dmLogCallEnd(callRow, finalStatus){
+  const acceptedAt = dmState.callAcceptedAt;
+  const durationSec = acceptedAt ? Math.max(0, Math.round((Date.now()-acceptedAt)/1000)) : 0;
+  sb.from('dm_calls').update({ status:finalStatus, duration_seconds:durationSec }).eq('id', callRow.id).then(undefined, ()=>{
+    // Colonne duration_seconds probablement absente côté Supabase — on
+    // retente au moins la mise à jour du statut seul pour ne pas perdre
+    // l'historique (statut) même sans la durée.
+    sb.from('dm_calls').update({ status:finalStatus }).eq('id', callRow.id).then(undefined, ()=>{});
+  });
+  const peerId = callRow.caller_id === sbUser.id ? callRow.callee_id : callRow.caller_id;
+  const overlay = document.getElementById('dmChatOverlay');
+  if(dmState.otherUser && dmState.otherUser.id === peerId && overlay && overlay.classList.contains('open')){
+    dmAppendCallLog(Object.assign({}, callRow, { status:finalStatus, duration_seconds:durationSec }), true);
+  }
+}
 function dmDayKey(d){ return d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate(); }
+// AJOUT (2026-09-11) : la corbeille de suppression n'apparaît plus en
+// permanence sur mobile (voir CSS .dm-msg-actions / .show-actions) — elle se
+// révèle désormais via un appui long sur le message, comme sur WhatsApp/
+// Messenger, et se referme au tap suivant ailleurs dans la conversation.
+let dmLongPressTimer = null;
+function dmBindLongPressActions(){
+  const box = document.getElementById('dmChatMessages');
+  if(!box || box.dataset.longPressBound) return;
+  box.dataset.longPressBound = '1';
+  const hideAll = (except)=>{
+    box.querySelectorAll('.dm-bubble-wrap.show-actions').forEach(el=>{ if(el!==except) el.classList.remove('show-actions'); });
+  };
+  const cancelPress = ()=>{ if(dmLongPressTimer){ clearTimeout(dmLongPressTimer); dmLongPressTimer = null; } };
+  box.addEventListener('pointerdown', (e)=>{
+    const wrap = e.target.closest('.dm-bubble-wrap');
+    if(!wrap) return;
+    cancelPress();
+    dmLongPressTimer = setTimeout(()=>{
+      hideAll(wrap);
+      wrap.classList.add('show-actions');
+      if(navigator.vibrate) navigator.vibrate(12);
+    }, 420);
+  });
+  box.addEventListener('pointerup', cancelPress);
+  box.addEventListener('pointercancel', cancelPress);
+  box.addEventListener('pointerleave', cancelPress);
+  box.addEventListener('click', (e)=>{
+    if(!e.target.closest('.dm-bubble-wrap')) hideAll();
+  });
+}
 function dmDaySeparatorLabel(d){
   const today = new Date(); const yest = new Date(); yest.setDate(today.getDate()-1);
   if(dmDayKey(d)===dmDayKey(today)) return "Aujourd'hui";
@@ -7654,6 +7855,7 @@ function dmResetInputRow(){
     <input type="text" id="dmChatInput" placeholder="Écris ton message…"
       onkeydown="if(event.key==='Enter'){event.preventDefault();dmSendText();}">
     <button class="dm-send-btn" id="dmMicOrSendBtn" onclick="dmMicOrSendTap()">&#x1f3a4;</button>`;
+  dmBindTypingBroadcast();
 }
 function dmCancelRecording(){
   if(dmState.mediaRecorder && dmState.mediaRecorder.state !== 'inactive') dmState.mediaRecorder.stop();
@@ -7838,7 +8040,7 @@ function dmAttemptIceRestart(pc){
     if(st) st.textContent = 'Connexion impossible (réseau)';
     showToast('Appel interrompu : réseau instable', '&#x26a0;&#xfe0f;');
     if(dmState.currentCall) sb.from('dm_calls').update({ status:'ended' }).eq('id', dmState.currentCall.id).then(undefined, ()=>{});
-    dmTeardownCall();
+    dmTeardownCall('ended');
     return;
   }
   const delay = DM_ICE_RESTART_DELAYS[pc._restartAttempts];
@@ -7980,9 +8182,41 @@ function dmRenderIncomingActions(){
   if(acceptBtn) acceptBtn.style.display = 'flex';
   if(panel) panel.style.display = 'none';
 }
+function dmSetCallButtonsConnecting(on){
+  const audioBtn = document.getElementById('dmAudioCallBtn'), videoBtn = document.getElementById('dmVideoCallBtn');
+  if(audioBtn) audioBtn.classList.toggle('connecting', on);
+  if(videoBtn) videoBtn.classList.toggle('connecting', on);
+}
+// AJOUT (2026-09-11) : dmStartCall devient un simple emballage autour de la
+// logique existante (renommée dmStartCallInner, inchangée) — donne un retour
+// visuel immédiat au clic (pulsation, voir CSS .connecting) et empêche les
+// double-appuis pendant que le micro/caméra et l'insertion en base se font,
+// sans changer le comportement de l'appel lui-même.
 async function dmStartCall(type){
+  if(dmState.callConnecting) return;
+  dmState.callConnecting = true;
+  dmSetCallButtonsConnecting(true);
+  try{ await dmStartCallInner(type); }
+  finally{ dmState.callConnecting = false; dmSetCallButtonsConnecting(false); }
+}
+async function dmStartCallInner(type){
   if(!dmState.otherUser || !dmState.convId) return;
   if(dmState.currentCall){ showToast('Un appel est déjà en cours', '&#x26a0;&#xfe0f;'); return; }
+  // AJOUT (2026-09-11) : si le correspondant n'est pas connecté (voir
+  // dmOnlineUserIds / dmSetupPresence), inutile de faire sonner dans le vide
+  // pendant 45s — on prévient immédiatement et on annule avant même de
+  // toucher au micro/caméra.
+  if(!dmOnlineUserIds.has(dmState.otherUser.id)){
+    showToast("Cet utilisateur n'est pas en ligne", '&#x1f4f4;');
+    return;
+  }
+  // AJOUT (2026-09-11) : blocage des appels audio/vidéo par l'admin — voir
+  // dmCallsBlockedForSelf. Les messages (texte, image, fichier, vocal)
+  // restent autorisés même si les appels sont bloqués pour ce compte.
+  if(await dmCallsBlockedForSelf()){
+    showToast('Connexion impossible', '&#x1f6ab;');
+    return;
+  }
   // AJOUT (demande utilisateur) : pour un compte admin en appel vidéo, une
   // vidéo de bibliothèque DOIT être choisie AVANT tout le reste (avant même
   // de suspendre le jeu ou de toucher au micro) — si l'admin annule, rien
@@ -8062,7 +8296,7 @@ async function dmStartCall(type){
       if(dmState.currentCall && dmState.currentCall.id===callRow.id){
         showToast('Pas de réponse', '&#x1f4f4;');
         sb.from('dm_calls').update({ status:'missed' }).eq('id', callRow.id).then(undefined, ()=>{});
-        dmTeardownCall();
+        dmTeardownCall('missed');
       }
     }, 45000);
   }catch(e){
@@ -8184,6 +8418,7 @@ async function dmAcceptCall(){
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
     const { data: updated } = await sb.from('dm_calls').update({ sdp_answer: answer, status:'accepted' }).eq('id', callRow.id).select().single();
+    dmState.callAcceptedAt = Date.now();
     dmShowCallUI(callRow.call_type);
     document.getElementById('dmCallStatus').textContent = 'En appel';
     dmApplyNewIce(updated || callRow, false);
@@ -8199,7 +8434,7 @@ function dmDeclineCall(){
   dmStopRingtone();
   if(dmState.callRecorder && dmState.callRecorder.state==='recording'){ dmState.callRecorder.stop(); }
   if(dmState.currentCall) sb.from('dm_calls').update({ status:'declined' }).eq('id', dmState.currentCall.id).then(undefined, ()=>{});
-  dmTeardownCall();
+  dmTeardownCall('declined');
 }
 /* ---- Enregistrement des appels vidéo admin ----
    Réservé au compte administrateur. L'enregistrement est local au navigateur
@@ -8340,10 +8575,14 @@ async function adminDeleteCallRecording(id,path){
 function dmEndCall(){
   dmStopRingtone();
   if(dmState.callRecorder && dmState.callRecorder.state==='recording'){ dmState.callRecorder.stop(); }
-  if(dmState.currentCall) sb.from('dm_calls').update({ status:'ended' }).eq('id', dmState.currentCall.id).then(undefined, ()=>{});
-  dmTeardownCall();
+  // AJOUT (2026-09-11) : si on raccroche avant que l'appel n'ait jamais été
+  // décroché (callAcceptedAt vide), c'est un appel annulé/manqué du point de
+  // vue de l'historique, pas un appel "terminé".
+  const finalStatus = dmState.callAcceptedAt ? 'ended' : 'missed';
+  if(dmState.currentCall) sb.from('dm_calls').update({ status:finalStatus }).eq('id', dmState.currentCall.id).then(undefined, ()=>{});
+  dmTeardownCall(finalStatus);
 }
-function dmTeardownCall(){
+function dmTeardownCall(finalStatus){
   dmStopRingtone();
   // CORRECTIF (2026-09-08) : ne reprendre le son du jeu que si la personne
   // est réellement revenue sur cet écran — sinon on le laisse suspendu
@@ -8381,8 +8620,12 @@ function dmTeardownCall(){
   if(panel) panel.style.display = 'none';
   const sheet = document.getElementById('dmAdminVideoSheet');
   if(sheet) sheet.remove();
+  // AJOUT (2026-09-11) : historique d'appels — voir dmLogCallEnd. Doit rester
+  // AVANT la remise à zéro de dmState.currentCall/callAcceptedAt ci-dessous.
+  if(finalStatus && dmState.currentCall) dmLogCallEnd(dmState.currentCall, finalStatus);
   dmState.currentCall = null; dmState.iceCallerLen = 0; dmState.iceCalleeLen = 0;
   dmState.callPeer = null; dmState.isMuted = false; dmState.isCamOff = false; dmState.isSpeakerOn = true;
+  dmState.callAcceptedAt = null;
 }
 function dmSubscribeCallUpdates(callId, isCaller){
   if(dmState.callChannel) sb.removeChannel(dmState.callChannel);
@@ -8393,14 +8636,15 @@ function dmSubscribeCallUpdates(callId, isCaller){
       // avec la dernière version connue de la ligne (notamment sdp_offer,
       // écrit par l'appelant juste après l'INSERT initial) — voir dmAcceptCall.
       if(dmState.currentCall && dmState.currentCall.id === row.id) dmState.currentCall = row;
-      if(row.status === 'declined'){ showToast('Appel refusé', '&#x1f4f5;'); dmTeardownCall(); return; }
-      if(row.status === 'ended' || row.status === 'missed'){ showToast('Appel terminé', '&#x1f4f4;'); dmTeardownCall(); return; }
+      if(row.status === 'declined'){ showToast('Appel refusé', '&#x1f4f5;'); dmTeardownCall('declined'); return; }
+      if(row.status === 'ended' || row.status === 'missed'){ showToast('Appel terminé', '&#x1f4f4;'); dmTeardownCall(row.status); return; }
       const pc = dmState.pc;
       if(isCaller && row.status === 'accepted' && pc && !pc.currentRemoteDescription && row.sdp_answer && row.sdp_answer.type && row.sdp_answer.sdp){
         dmStopRingtone();
         if(dmState.ringTimeout){ clearTimeout(dmState.ringTimeout); dmState.ringTimeout = null; }
         try{
           await pc.setRemoteDescription(new RTCSessionDescription(row.sdp_answer));
+          dmState.callAcceptedAt = Date.now();
           const st = document.getElementById('dmCallStatus'); if(st) st.textContent = 'En appel';
         }catch(e){
           showToast('Échec de connexion à l\'appel', '&#x26a0;&#xfe0f;');
@@ -8502,7 +8746,7 @@ function adminRenderUserDetailHeader(u){
     <div class="admin-actions" style="justify-content:flex-start;margin:10px 0">
       <button class="admin-btn success" onclick="adminOpenBalance('${u.id}','${esc(u.first_name||'Utilisateur')}')">💳 Solde</button>
       <button class="admin-btn dark" onclick="adminOpenUserChat('${u.id}','${esc(u.first_name||'Utilisateur')}','${esc(u.avatar_url||'')}')">💬 Discuter</button>
-      ${u.id!==sbUser.id?`<button class="admin-btn primary" onclick="adminToggleUserRole('${u.id}',${u.is_admin?'true':'false'},'${esc(u.first_name||'Utilisateur')}')">${u.is_admin?'🚫 Retirer admin':'👑 Rendre admin'}</button><button class="admin-btn danger" onclick="adminDeleteUser('${u.id}','${esc(u.first_name||'Utilisateur')}')">🗑️ Supprimer</button>`:'<div class="admin-meta">Ton propre compte — rôle et suppression indisponibles ici.</div>'}
+      ${u.id!==sbUser.id?`<button class="admin-btn primary" onclick="adminToggleUserRole('${u.id}',${u.is_admin?'true':'false'},'${esc(u.first_name||'Utilisateur')}')">${u.is_admin?'🚫 Retirer admin':'👑 Rendre admin'}</button><button class="admin-btn${u.calls_blocked?' danger':' dark'}" onclick="adminToggleCallsBlocked('${u.id}',${u.calls_blocked?'true':'false'},'${esc(u.first_name||'Utilisateur')}')">${u.calls_blocked?'🔓 Réautoriser appels':'🚫 Bloquer appels'}</button><button class="admin-btn danger" onclick="adminDeleteUser('${u.id}','${esc(u.first_name||'Utilisateur')}')">🗑️ Supprimer</button>`:'<div class="admin-meta">Ton propre compte — rôle et suppression indisponibles ici.</div>'}
     </div>`;
 }
 function adminUserDetailTab(name){
@@ -8593,6 +8837,25 @@ async function adminToggleUserRole(id,isAdminNow,name){
     adminFilterUsers();
     if(adminDetailUserId===id && u) adminRenderUserDetailHeader(u);
   }catch(e){ adminToast(e.message||'Action impossible'); }
+}
+// AJOUT (2026-09-11) : blocage des appels audio/vidéo d'un compte, indépendant
+// des messages (qui restent toujours autorisés) — voir dmCallsBlockedForSelf
+// côté client, qui lit cette même colonne avant de lancer un appel.
+// Prérequis Supabase (à exécuter une fois si pas déjà fait) :
+//   ALTER TABLE profiles ADD COLUMN IF NOT EXISTS calls_blocked boolean DEFAULT false;
+// Et pour que le statut s'affiche correctement dans cette liste, la fonction
+// RPC admin_list_users doit aussi renvoyer la colonne calls_blocked (sinon le
+// bouton part toujours de l'état "non bloqué" jusqu'au premier basculement).
+async function adminToggleCallsBlocked(id,blockedNow,name){
+  const block = !blockedNow;
+  if(!confirm(block?`Bloquer les appels audio/vidéo de ${name} ? (les messages restent autorisés)`:`Réautoriser les appels audio/vidéo de ${name} ?`)) return;
+  try{
+    const {error} = await sb.from('profiles').update({ calls_blocked: block }).eq('id', id);
+    if(error) throw error;
+    const u = adminUsersCache.find(x=>x.id===id); if(u) u.calls_blocked = block;
+    adminToast(block?'Appels bloqués pour ce compte ✓':'Appels réautorisés ✓');
+    if(adminDetailUserId===id && u) adminRenderUserDetailHeader(u);
+  }catch(e){ adminToast(e.message||"Action impossible (colonne calls_blocked absente côté Supabase ?)"); }
 }
 function adminRenderUsers(box,arr){box.innerHTML=arr.length?arr.map(u=>adminUserHtml(u)).join(''):'<div class="admin-empty">Aucun compte trouvé.</div>'}
 function adminRenderCallUsers(box,arr){box.innerHTML=arr.length?arr.map(u=>adminUserHtml(u,true)).join(''):'<div class="admin-empty">Aucun compte trouvé.</div>'}
