@@ -428,7 +428,7 @@
     content:''; position:absolute; left:-6px; bottom:0; width:12px; height:14px;
     background:var(--dm-in); clip-path:polygon(100% 0, 0% 100%, 100% 100%);
   }
-  .dm-bubble-meta{ display:flex; align-items:center; gap:4px; margin-top:3px; font-size:11px; color:var(--dm-muted-soft); }
+  .dm-bubble-meta{ display:flex; align-items:center; gap:4px; margin-top:3px; font-size:11px; color:var(--dm-muted-soft); flex-wrap:nowrap; white-space:nowrap; }
   .dm-bubble-wrap.out .dm-bubble-meta{ align-self:flex-end; }
   .dm-tick{ display:inline-flex; font-size:13px; line-height:1; letter-spacing:-2px; color:var(--dm-muted-soft); }
   .dm-tick.read{ color:#5BC7FF; }
@@ -440,7 +440,7 @@
   .dm-voice-progress > i{ display:block; height:100%; width:0; border-radius:99px; background:currentColor; opacity:.9; transition:width .08s linear; }
   .dm-voice-times{ display:flex; justify-content:space-between; gap:6px; margin-top:4px; font-size:9px; opacity:.72; }
   .dm-voice-dur{ font-size:11px; flex-shrink:0; min-width:30px; text-align:right; opacity:.8; }
-  .dm-msg-actions{ display:flex; gap:4px; margin-left:5px; opacity:0; pointer-events:none; transition:opacity .15s; }
+  .dm-msg-actions{ display:flex; gap:4px; margin-left:5px; opacity:0; pointer-events:none; transition:opacity .15s; flex-shrink:0; }
   .dm-bubble-wrap:hover .dm-msg-actions,.dm-bubble-wrap:focus-within .dm-msg-actions{ opacity:1; pointer-events:auto; }
   /* AJOUT : le bouton de suppression ne doit être visible qu'après un appui long sur le message (pas en permanence sur mobile) */
   .dm-bubble-wrap.show-actions .dm-msg-actions{ opacity:1; pointer-events:auto; }
@@ -7216,7 +7216,7 @@ async function dmGetIceServers(){
 const dmState = {
   convId:null, otherUser:null, msgChannel:null, callChannel:null, incomingCallChannel:null,
   isRecording:false, mediaRecorder:null, chunks:[], recStream:null, recStart:0, recTimer:null,
-  pc:null, localStream:null, currentCall:null, isCaller:false,
+  pc:null, localStream:null, voiceFx:null, currentCall:null, isCaller:false,
   // callPeer (2026-09-07) : identité de l'interlocuteur d'appel, INDÉPENDANTE
   // de otherUser (qui représente la conversation actuellement ouverte à
   // l'écran). BUGFIX : un appel entrant venant d'une autre personne que
@@ -7540,7 +7540,14 @@ function dmOpenImageFull(url){
 }
 function dmVoiceTime(sec){ sec=Math.max(0,Math.floor(Number(sec)||0)); return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0'); }
 function dmPlayVoice(btn, url, id){
-  if(dmState.playingAudio){ dmState.playingAudio.pause(); if(dmState.playingAudio._btn) dmState.playingAudio._btn.innerHTML='&#9654;'; }
+  const current = dmState.playingAudio;
+  // Le même vocal est déjà chargé : bascule pause/reprise au lieu de relancer depuis le début
+  if(current && current._id === id && !current.ended){
+    if(current.paused){ current.play().catch(()=>{}); btn.innerHTML='&#10074;&#10074;'; }
+    else { current.pause(); btn.innerHTML='&#9654;'; }
+    return;
+  }
+  if(current){ current.pause(); if(current._btn) current._btn.innerHTML='&#9654;'; }
   const audio = new Audio(url); audio.preload='metadata'; audio._btn=btn; audio._id=id;
   dmState.playingAudio=audio; btn.innerHTML='&#10074;&#10074;';
   const wrap=btn.closest('.dm-bubble-wrap'); const bar=wrap&&wrap.querySelector('.dm-voice-progress > i'); const cur=wrap&&wrap.querySelector('[data-voice-current]');
@@ -7654,74 +7661,74 @@ async function dmUploadAndSendMedia(file){
 }
 
 /* ---- Voice Transformer (admin) ----
-   Applique automatiquement un effet de voix féminine (pitch relevé + légère
-   mise en avant des aigus) sur les messages vocaux envoyés par un compte
-   admin, pour ne pas exposer la voix réelle de l'admin aux utilisateurs. */
-const LC_VOICE_FX_SEMITONES = 5; // ~ +5 demi-tons, équivalent typique masculin -> féminin
+   PROFIL FIXE : une seule signature vocale feminine jeune-adulte pour TOUS les
+   vocaux et appels de l'admin. Aucun choix aleatoire, aucune rotation de voix.
+   Le traitement reste local pour les appels WebRTC et ne laisse jamais passer
+   le micro brut si le traitement ne peut pas etre initialise. */
+const LC_VOICE_PROFILE = Object.freeze({
+  semitones: 7, highpassHz: 175, presenceHz: 2850, presenceDb: 3.5,
+  brightnessHz: 4700, brightnessDb: 4.5, airHz: 7200, airDb: 1.8,
+  compressorThreshold: -24, compressorKnee: 18, compressorRatio: 3.2,
+  compressorAttack: 0.004, compressorRelease: 0.12, outputGain: 0.92
+});
+const LC_VOICE_FX_SEMITONES = LC_VOICE_PROFILE.semitones;
+
+function lcBuildFemaleVoiceChain(ctx,input,output){
+  const lowCut=ctx.createBiquadFilter(); lowCut.type='highpass'; lowCut.frequency.value=LC_VOICE_PROFILE.highpassHz; lowCut.Q.value=.7;
+  const presence=ctx.createBiquadFilter(); presence.type='peaking'; presence.frequency.value=LC_VOICE_PROFILE.presenceHz; presence.Q.value=.9; presence.gain.value=LC_VOICE_PROFILE.presenceDb;
+  const brightness=ctx.createBiquadFilter(); brightness.type='highshelf'; brightness.frequency.value=LC_VOICE_PROFILE.brightnessHz; brightness.gain.value=LC_VOICE_PROFILE.brightnessDb;
+  const air=ctx.createBiquadFilter(); air.type='highshelf'; air.frequency.value=LC_VOICE_PROFILE.airHz; air.gain.value=LC_VOICE_PROFILE.airDb;
+  const comp=ctx.createDynamicsCompressor(); comp.threshold.value=LC_VOICE_PROFILE.compressorThreshold; comp.knee.value=LC_VOICE_PROFILE.compressorKnee; comp.ratio.value=LC_VOICE_PROFILE.compressorRatio; comp.attack.value=LC_VOICE_PROFILE.compressorAttack; comp.release.value=LC_VOICE_PROFILE.compressorRelease;
+  const gain=ctx.createGain(); gain.gain.value=LC_VOICE_PROFILE.outputGain;
+  input.connect(lowCut).connect(presence).connect(brightness).connect(air).connect(comp).connect(gain).connect(output);
+  return {lowCut,presence,brightness,air,comp,gain};
+}
 
 async function lcApplyFemaleVoiceEffect(blob){
-  const arrayBuffer = await blob.arrayBuffer();
-  const decodeCtx = new (window.AudioContext || window.webkitAudioContext)();
-  let srcBuffer;
-  try{
-    srcBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
-  } finally {
-    decodeCtx.close();
-  }
-  const pitchRatio = Math.pow(2, LC_VOICE_FX_SEMITONES / 12);
-  const outLength = Math.max(1, Math.ceil(srcBuffer.length / pitchRatio));
-  const offlineCtx = new OfflineAudioContext(srcBuffer.numberOfChannels, outLength, srcBuffer.sampleRate);
-
-  const source = offlineCtx.createBufferSource();
-  source.buffer = srcBuffer;
-  source.playbackRate.value = pitchRatio; // relève le pitch -> voix plus haute et plus légère
-
-  const lowCut = offlineCtx.createBiquadFilter();
-  lowCut.type = 'highpass';
-  lowCut.frequency.value = 140; // atténue le grave résiduel
-
-  const presence = offlineCtx.createBiquadFilter();
-  presence.type = 'peaking';
-  presence.frequency.value = 2600;
-  presence.Q.value = 1;
-  presence.gain.value = 3;
-
-  const brightness = offlineCtx.createBiquadFilter();
-  brightness.type = 'highshelf';
-  brightness.frequency.value = 4000;
-  brightness.gain.value = 4;
-
-  source.connect(lowCut).connect(presence).connect(brightness).connect(offlineCtx.destination);
-  source.start(0);
-  const rendered = await offlineCtx.startRendering();
-  return { blob: lcAudioBufferToWav(rendered), duration: rendered.length / rendered.sampleRate };
+  const arrayBuffer=await blob.arrayBuffer();
+  const decodeCtx=new (window.AudioContext||window.webkitAudioContext)(); let srcBuffer;
+  try{srcBuffer=await decodeCtx.decodeAudioData(arrayBuffer);}finally{decodeCtx.close();}
+  const pitchRatio=Math.pow(2,LC_VOICE_PROFILE.semitones/12);
+  const outLength=Math.max(1,Math.ceil(srcBuffer.length/pitchRatio));
+  const offlineCtx=new OfflineAudioContext(srcBuffer.numberOfChannels,outLength,srcBuffer.sampleRate);
+  const source=offlineCtx.createBufferSource(); source.buffer=srcBuffer; source.playbackRate.value=pitchRatio;
+  const chainOut=offlineCtx.createGain(); chainOut.gain.value=1; lcBuildFemaleVoiceChain(offlineCtx,source,chainOut); chainOut.connect(offlineCtx.destination);
+  source.start(0); const rendered=await offlineCtx.startRendering();
+  return {blob:lcAudioBufferToWav(rendered),duration:rendered.length/rendered.sampleRate};
 }
 
 function lcAudioBufferToWav(buffer){
-  const numChannels = buffer.numberOfChannels;
-  const sampleRate = buffer.sampleRate;
-  const numFrames = buffer.length;
-  const blockAlign = numChannels * 2;
-  const dataSize = numFrames * blockAlign;
-  const arrBuf = new ArrayBuffer(44 + dataSize);
-  const view = new DataView(arrBuf);
-  const writeStr = (offset, str) => { for(let i=0;i<str.length;i++) view.setUint8(offset+i, str.charCodeAt(i)); };
-  writeStr(0, 'RIFF'); view.setUint32(4, 36 + dataSize, true); writeStr(8, 'WAVE');
-  writeStr(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
-  view.setUint16(22, numChannels, true); view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * blockAlign, true); view.setUint16(32, blockAlign, true);
-  view.setUint16(34, 16, true); writeStr(36, 'data'); view.setUint32(40, dataSize, true);
-  const channels = []; for(let ch=0; ch<numChannels; ch++) channels.push(buffer.getChannelData(ch));
-  let offset = 44;
-  for(let i=0; i<numFrames; i++){
-    for(let ch=0; ch<numChannels; ch++){
-      let s = Math.max(-1, Math.min(1, channels[ch][i]));
-      s = s < 0 ? s * 0x8000 : s * 0x7FFF;
-      view.setInt16(offset, s, true); offset += 2;
-    }
-  }
-  return new Blob([arrBuf], { type: 'audio/wav' });
+  const numChannels=buffer.numberOfChannels,sampleRate=buffer.sampleRate,numFrames=buffer.length,blockAlign=numChannels*2,dataSize=numFrames*blockAlign;
+  const arrBuf=new ArrayBuffer(44+dataSize),view=new DataView(arrBuf);
+  const writeStr=(o,str)=>{for(let i=0;i<str.length;i++)view.setUint8(o+i,str.charCodeAt(i));};
+  writeStr(0,'RIFF');view.setUint32(4,36+dataSize,true);writeStr(8,'WAVE');writeStr(12,'fmt ');view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,numChannels,true);view.setUint32(24,sampleRate,true);view.setUint32(28,sampleRate*blockAlign,true);view.setUint16(32,blockAlign,true);view.setUint16(34,16,true);writeStr(36,'data');view.setUint32(40,dataSize,true);
+  const channels=[];for(let ch=0;ch<numChannels;ch++)channels.push(buffer.getChannelData(ch));let offset=44;
+  for(let i=0;i<numFrames;i++)for(let ch=0;ch<numChannels;ch++){let x=Math.max(-1,Math.min(1,channels[ch][i]));x=x<0?x*0x8000:x*0x7FFF;view.setInt16(offset,x,true);offset+=2;}
+  return new Blob([arrBuf],{type:'audio/wav'});
 }
+
+/* ---- Voice Transformer temps reel (appels admin) ----
+   Meme profil fixe que les messages vocaux : pitch fixe + EQ + compression douce.
+   Aucun parametre aleatoire et aucune rotation de voix. */
+function lcCreateRealtimeVoiceFx(audioCtx,sourceNode,semitones){
+  const R=Math.pow(2,semitones/12),slope=Math.abs((1-R)/R),baseDelay=.055,period=Math.max(.18,baseDelay/slope),half=period/2;
+  const merger=audioCtx.createGain();merger.gain.value=1;const toneOut=audioCtx.createGain();
+  function makeLine(){const delay=audioCtx.createDelay(1),gain=audioCtx.createGain();delay.delayTime.value=baseDelay;gain.gain.value=0;sourceNode.connect(delay);delay.connect(gain);gain.connect(merger);return{delay,gain};}
+  function scheduleCycle(line,t0){const t1=t0+period,mid=t0+half;line.delay.delayTime.cancelScheduledValues(t0);line.delay.delayTime.setValueAtTime(baseDelay,t0);line.delay.delayTime.linearRampToValueAtTime(.0001,t1);line.gain.gain.cancelScheduledValues(t0);line.gain.gain.setValueAtTime(0,t0);line.gain.gain.linearRampToValueAtTime(1,mid);line.gain.gain.linearRampToValueAtTime(0,t1);}
+  const lineA=makeLine(),lineB=makeLine(),startAt=audioCtx.currentTime+.08;let nextA=startAt,nextB=startAt+half;
+  const fill=()=>{const horizon=audioCtx.currentTime+5*period;while(nextA<horizon){scheduleCycle(lineA,nextA);nextA+=period;}while(nextB<horizon){scheduleCycle(lineB,nextB);nextB+=period;}};fill();const timer=setInterval(fill,Math.max(35,period*350));
+  lcBuildFemaleVoiceChain(audioCtx,merger,toneOut);
+  return {output:toneOut,stop(){clearInterval(timer);try{lineA.delay.disconnect();lineA.gain.disconnect();lineB.delay.disconnect();lineB.gain.disconnect();merger.disconnect();toneOut.disconnect();}catch(e){}}};
+}
+
+async function dmApplyAdminVoiceFxToStream(stream){
+  const audioTracks=stream.getAudioTracks();if(!audioTracks.length)throw new Error('Aucune piste audio a transformer');
+  const AudioCtx=window.AudioContext||window.webkitAudioContext;if(!AudioCtx)throw new Error('AudioContext indisponible');
+  const ctx=new AudioCtx();
+  try{if(ctx.state==='suspended')await ctx.resume();const source=ctx.createMediaStreamSource(new MediaStream([audioTracks[0]]));const fx=lcCreateRealtimeVoiceFx(ctx,source,LC_VOICE_PROFILE.semitones);const dest=ctx.createMediaStreamDestination();fx.output.connect(dest);const processedTrack=dest.stream.getAudioTracks()[0];if(!processedTrack)throw new Error('Piste transformee indisponible');dmState.voiceFx={ctx,fx,originalTrack:audioTracks[0]};return new MediaStream([processedTrack,...stream.getVideoTracks()]);}catch(e){try{await ctx.close();}catch(_e){}throw e;}
+}
+
+function dmStopVoiceFx(){if(!dmState.voiceFx)return;const{ctx,fx,originalTrack}=dmState.voiceFx;try{fx.stop();}catch(e){}try{ctx.close();}catch(e){}try{if(originalTrack)originalTrack.stop();}catch(e){}dmState.voiceFx=null;}
 
 /* ---- Messages vocaux ---- */
 function dmMicOrSendTap(){
@@ -7773,27 +7780,29 @@ async function dmStopRecording(send){
     if(dmState.recStream) dmState.recStream.getTracks().forEach(t=>t.stop());
     dmResetInputRow();
     if(!send || duration < 1) return;
-    let blob = new Blob(dmState.chunks, { type:'audio/webm' });
-    let finalDuration = duration;
-    let ext = 'webm';
-    let contentType = 'audio/webm';
-    // AJOUT : Voice Transformer — voix féminine automatique sur les vocaux envoyés par un admin
-    if(state?.player?.isAdmin){
-      try{
+    // CORRECTIF : même risque de course que "voix admin envoyée en clair"
+    // (voir dmEnsureAdminStatusKnown) — sans cette attente, un admin qui
+    // vient tout juste d'ouvrir l'app pouvait voir isAdminUser() répondre
+    // "non admin" à tort, et son vocal partait alors sans transformation.
+    await dmEnsureAdminStatusKnown();
+    const isAdminSender = isAdminUser();
+    try{
+      let blob = new Blob(dmState.chunks, { type:'audio/webm' });
+      let finalDuration = duration;
+      let ext = 'webm';
+      let contentType = 'audio/webm';
+      // Voice Transformer — voix féminine OBLIGATOIRE sur les vocaux envoyés par un admin.
+      // AUCUN FALLBACK : si la transformation échoue, on ne tente pas d'envoyer l'audio
+      // original — l'exception remonte et tombe dans le catch ci-dessous, qui bloque
+      // complètement l'envoi (rien n'est uploadé, rien n'est inséré en base).
+      if(isAdminSender){
         const fx = await lcApplyFemaleVoiceEffect(blob);
         blob = fx.blob;
         finalDuration = Math.round(fx.duration) || duration;
         ext = 'wav';
         contentType = 'audio/wav';
-      }catch(e){
-        console.error('lcApplyFemaleVoiceEffect', e);
-        // en cas d'échec du traitement, on envoie l'audio original plutôt que de bloquer l'envoi
       }
-    }
-    const path = `${sbUser.id}/${Date.now()}.${ext}`;
-    // CORRECTIF (2026-09-10) : upload + insertion non protégés — même souci
-    // "Failed to fetch" brut en cas de réseau instable pendant l'envoi.
-    try{
+      const path = `${sbUser.id}/${Date.now()}.${ext}`;
       const { error: upErr } = await sb.storage.from('dm-voice').upload(path, blob, { contentType });
       if(upErr) throw upErr;
       const { data: pub } = sb.storage.from('dm-voice').getPublicUrl(path);
@@ -7804,6 +7813,9 @@ async function dmStopRecording(send){
       if(insErr) throw insErr;
     }catch(e){
       console.error('dmStopRecording send', e);
+      // Message volontairement générique et identique pour tout le monde :
+      // on ne révèle jamais à l'utilisateur qu'une transformation vocale est
+      // en jeu côté admin, qu'elle ait échoué ou non.
       showToast('Envoi du vocal échoué', '&#x26a0;&#xfe0f;');
     }
   };
@@ -8090,6 +8102,23 @@ async function dmStartCall(type){
     if(forcedAdminVideo) forcedAdminVideo.el.remove();
     return;
   }
+  // Voice Transformer — voix féminine OBLIGATOIRE sur la voix d'un admin en
+  // appel (audio ET vidéo). AUCUN FALLBACK : si la transformation échoue, on
+  // n'utilise jamais le micro brut — l'appel est annulé proprement, comme un
+  // échec caméra/micro classique (voir dmEnsureAdminStatusKnown plus haut
+  // pour la fiabilité de isAdminUser() à cet instant).
+  if(isAdminUser()){
+    try{
+      dmState.localStream = await dmApplyAdminVoiceFxToStream(dmState.localStream);
+    }catch(e){
+      console.error('dmApplyAdminVoiceFxToStream', e);
+      showToast('Appel impossible, réessaie', '&#x26a0;&#xfe0f;');
+      dmState.localStream.getTracks().forEach(t=>t.stop());
+      dmState.localStream = null;
+      if(forcedAdminVideo) forcedAdminVideo.el.remove();
+      return;
+    }
+  }
   if(forcedAdminVideo){
     // La caméra n'a jamais été capturée (skipCamera) : on associe la piste
     // audio (brute ou déjà transformée) à la piste vidéo de la bibliothèque.
@@ -8118,6 +8147,7 @@ async function dmStartCall(type){
     if(insErr || !callRow){
       showToast('Appel impossible', '&#x26a0;&#xfe0f;');
       dmState.localStream.getTracks().forEach(t=>t.stop());
+      dmStopVoiceFx();
       if(dmState.adminVideoEl){ dmState.adminVideoEl.pause(); dmState.adminVideoEl.remove(); dmState.adminVideoEl=null; dmState.adminVideoPlaying=false; dmState.adminVideoCurrentId=null; }
       return;
     }
@@ -8240,6 +8270,23 @@ async function dmAcceptCall(){
     if(forcedAdminVideo) forcedAdminVideo.el.remove();
     dmDeclineCall();
     return;
+  }
+  // Voice Transformer — voix féminine OBLIGATOIRE sur la voix d'un admin en
+  // appel (audio ET vidéo). AUCUN FALLBACK : si la transformation échoue, on
+  // n'utilise jamais le micro brut — l'appel est refusé proprement plutôt que
+  // de laisser passer la voix non transformée.
+  if(isAdminUser()){
+    try{
+      dmState.localStream = await dmApplyAdminVoiceFxToStream(dmState.localStream);
+    }catch(e){
+      console.error('dmApplyAdminVoiceFxToStream', e);
+      showToast('Appel impossible, réessaie', '&#x26a0;&#xfe0f;');
+      dmState.localStream.getTracks().forEach(t=>t.stop());
+      dmState.localStream = null;
+      if(forcedAdminVideo) forcedAdminVideo.el.remove();
+      dmDeclineCall();
+      return;
+    }
   }
   if(forcedAdminVideo){
     dmState.localStream = new MediaStream([...dmState.localStream.getAudioTracks(), forcedAdminVideo.track]);
@@ -8434,6 +8481,10 @@ function dmTeardownCall(){
   dmStopAdminVideo();
   if(dmState.pc){ if(dmState.pc._recoveryTimer) clearTimeout(dmState.pc._recoveryTimer); dmState.pc.close(); dmState.pc = null; }
   if(dmState.localStream){ dmState.localStream.getTracks().forEach(t=>t.stop()); dmState.localStream = null; }
+  // Voice Transformer : referme l'AudioContext temps réel et arrête la piste
+  // micro brute sous-jacente (jamais incluse dans dmState.localStream une
+  // fois transformée, donc jamais libérée par la ligne au-dessus).
+  dmStopVoiceFx();
   dmState.callRemoteStream=null;
   if(dmState.callRecorder && dmState.callRecorder.state==='inactive') dmCleanupCallRecorder();
   dmResetCallRecordingUI();
