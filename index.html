@@ -3142,7 +3142,8 @@ button,input,textarea,select{max-width:100%;}
   .nav-item{font-size:8px;padding-left:2px;padding-right:2px;}
   .nav-item .ic{font-size:15px;}
   .wallet-chip{padding-right:8px;}
-  .wallet-chip-text{display:none;}
+  .wallet-chip-lbl{display:none;}
+  .wallet-chip-amt{font-size:11px;}
 }
 
 @media (max-height:600px) and (orientation:landscape){
@@ -14514,6 +14515,18 @@ function lcShowJobSuccess(o,debited,remaining){
 @media (prefers-reduced-motion: reduce){
   .dm-bubble-wrap, .dm-conv-unread, .dm-avatar.online::after{ animation:none !important; }
 }
+</style>
+
+<style id="dm-voice-compact-height">
+/* Réduction supplémentaire de la hauteur du cadre des messages vocaux :
+   bouton plus petit, marges resserrées, padding de bulle réduit pour ce
+   type de message uniquement (les autres bulles ne sont pas touchées). */
+.dm-bubble.dm-voice-bubble{ padding:7px 10px 8px; }
+.dm-bubble.dm-voice-bubble .dm-voice-row{ width:130px; gap:7px; }
+.dm-bubble.dm-voice-bubble .dm-voice-play{ width:26px; height:26px; font-size:10.5px; }
+.dm-bubble.dm-voice-bubble .dm-voice-progress{ height:3px; }
+.dm-bubble.dm-voice-bubble .dm-voice-times{ margin:3px 0 0 33px; font-size:8.5px; line-height:1; }
+.dm-bubble-wrap.voice{ max-width:min(78%, 190px); }
 </style>
 </body>
 </html>
