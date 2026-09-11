@@ -422,7 +422,7 @@
       radial-gradient(circle at 92% 82%, rgba(108,92,232,.05) 0, transparent 40%),
       repeating-linear-gradient(135deg, rgba(255,255,255,.015) 0 2px, transparent 2px 26px);
   }
-  .dm-bubble-wrap{ max-width:78%; display:flex; flex-direction:column; margin:3px 0; position:relative; animation:dmBubbleIn .22s ease; }
+  .dm-bubble-wrap{ max-width:78%; width:fit-content; display:flex; flex-direction:column; margin:3px 0; position:relative; animation:dmBubbleIn .22s ease; }
   @keyframes dmBubbleIn{ from{ opacity:0; transform:translateY(6px) scale(.98); } to{ opacity:1; transform:none; } }
   .dm-bubble-wrap.out{ align-self:flex-end; }
   .dm-bubble-wrap.in{ align-self:flex-start; }
@@ -7541,7 +7541,7 @@ function dmCallLogIcon(type){ return type==='video' ? '&#x1f4f9;' : '&#x1f4de;';
 function dmCallLogText(row){
   const out = row.caller_id === sbUser.id;
   const typeLabel = row.call_type==='video' ? 'Appel vidéo' : 'Appel vocal';
-  const arrow = out ? '&#8599;&#65039; ' : '&#8601;&#65039; ';
+  const arrow = out ? '↗️ ' : '↙️ ';
   if(row.status==='missed') return arrow + typeLabel + (out ? ' — sans réponse' : ' manqué');
   if(row.status==='declined') return arrow + typeLabel + ' refusé';
   const d = row.duration_seconds;
