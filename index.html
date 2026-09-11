@@ -422,7 +422,7 @@
       radial-gradient(circle at 92% 82%, rgba(108,92,232,.05) 0, transparent 40%),
       repeating-linear-gradient(135deg, rgba(255,255,255,.015) 0 2px, transparent 2px 26px);
   }
-  .dm-bubble-wrap{ max-width:78%; width:fit-content; display:flex; flex-direction:column; margin:3px 0; position:relative; animation:dmBubbleIn .22s ease; }
+  .dm-bubble-wrap{ max-width:78%; display:flex; flex-direction:column; margin:3px 0; position:relative; animation:dmBubbleIn .22s ease; }
   @keyframes dmBubbleIn{ from{ opacity:0; transform:translateY(6px) scale(.98); } to{ opacity:1; transform:none; } }
   .dm-bubble-wrap.out{ align-self:flex-end; }
   .dm-bubble-wrap.in{ align-self:flex-start; }
@@ -7291,20 +7291,38 @@ const dmState = {
 // l'app, sans action explicite nécessaire.
 let dmPresenceChannel = null;
 let dmOnlineUserIds = new Set();
+// AJOUT (2026-09-11) : la présence Realtime peut mettre un instant à se
+// synchroniser (reconnexion réseau, appli en arrière-plan sur mobile, etc.).
+// Avant ce drapeau, dmOnlineUserIds vide = "tout le monde hors ligne" à tort
+// pendant cette fenêtre, ce qui bloquait TOUS les appels au démarrage de
+// l'appli ou après une coupure réseau. dmPresenceSynced ne passe à true
+// qu'après un premier événement 'sync' réel — voir dmIsConfidentlyOffline,
+// utilisé par dmStartCall à la place d'une simple absence dans le Set.
+let dmPresenceSynced = false;
+function dmIsConfidentlyOffline(userId){
+  return dmPresenceSynced && !!dmPresenceChannel && !dmOnlineUserIds.has(userId);
+}
 function dmSetupPresence(){
   if(dmPresenceChannel || !sbUser) return;
   dmPresenceChannel = sb.channel('dm_online_users', { config: { presence: { key: sbUser.id } } })
     .on('presence', { event:'sync' }, ()=>{
       dmOnlineUserIds = new Set(Object.keys(dmPresenceChannel.presenceState()));
+      dmPresenceSynced = true;
       dmRefreshOnlineIndicators();
     })
     .subscribe(async (status)=>{
       if(status === 'SUBSCRIBED') await dmPresenceChannel.track({ online_at: new Date().toISOString() });
+      // CORRECTIF (2026-09-11) : si le canal tombe (réseau coupé, appli mise
+      // en arrière-plan), on ne sait plus vraiment qui est en ligne — mieux
+      // vaut ne plus bloquer aucun appel sur cette base (fail-open) que
+      // bloquer tout le monde à tort jusqu'à la reconnexion.
+      if(status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') dmPresenceSynced = false;
     });
 }
 function dmTeardownPresence(){
   if(dmPresenceChannel){ sb.removeChannel(dmPresenceChannel); dmPresenceChannel = null; }
   dmOnlineUserIds = new Set();
+  dmPresenceSynced = false;
 }
 // Ré-applique le point vert / "En ligne" partout où c'est actuellement
 // affiché (recherche, liste de conversations, en-tête du chat ouvert),
@@ -7541,7 +7559,7 @@ function dmCallLogIcon(type){ return type==='video' ? '&#x1f4f9;' : '&#x1f4de;';
 function dmCallLogText(row){
   const out = row.caller_id === sbUser.id;
   const typeLabel = row.call_type==='video' ? 'Appel vidéo' : 'Appel vocal';
-  const arrow = out ? '↗️ ' : '↙️ ';
+  const arrow = out ? '&#8599;&#65039; ' : '&#8601;&#65039; ';
   if(row.status==='missed') return arrow + typeLabel + (out ? ' — sans réponse' : ' manqué');
   if(row.status==='declined') return arrow + typeLabel + ' refusé';
   const d = row.duration_seconds;
@@ -7566,7 +7584,7 @@ function dmAppendCallLog(row, scroll){
   wrap.className = 'dm-call-log-wrap';
   wrap.innerHTML = `<button class="dm-call-log${missed?' missed':''}" onclick="dmStartCall('${esc(row.call_type)}')" title="Rappeler">
       <span class="dm-call-log-ic">${dmCallLogIcon(row.call_type)}</span>
-      <span class="dm-call-log-txt">${esc(dmCallLogText(row))}</span>
+      <span class="dm-call-log-txt">${dmCallLogText(row)}</span>
       <span class="dm-call-log-time">${time}</span>
     </button>`;
   box.appendChild(wrap);
@@ -8206,7 +8224,12 @@ async function dmStartCallInner(type){
   // dmOnlineUserIds / dmSetupPresence), inutile de faire sonner dans le vide
   // pendant 45s — on prévient immédiatement et on annule avant même de
   // toucher au micro/caméra.
-  if(!dmOnlineUserIds.has(dmState.otherUser.id)){
+  // CORRECTIF (2026-09-11) : dmOnlineUserIds.has(...) seul ne suffisait pas —
+  // tant que la présence n'a pas fini de se synchroniser (démarrage de
+  // l'appli, reconnexion réseau), le Set est vide et TOUT le monde semblait
+  // "hors ligne", bloquant tous les appels à tort. dmIsConfidentlyOffline ne
+  // répond "oui" que si la présence a réellement fini de se synchroniser.
+  if(dmIsConfidentlyOffline(dmState.otherUser.id)){
     showToast("Cet utilisateur n'est pas en ligne", '&#x1f4f4;');
     return;
   }
