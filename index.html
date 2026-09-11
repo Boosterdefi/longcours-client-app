@@ -505,7 +505,11 @@
   }
   .dm-emoji-picker button{ background:none; border:none; font-size:22px; padding:6px 0; cursor:pointer; border-radius:8px; line-height:1; }
   .dm-emoji-picker button:active{ background:rgba(0,0,0,.08); }
-  .dm-chat-input-row input[type=text]{ flex:1; background:var(--dm-surface2); border:none; outline:none; border-radius:22px; padding:10px 16px; color:var(--dm-text); font-size:14.5px; font-family:inherit; }
+  .dm-chat-input-row input[type=text],
+  .dm-chat-input-row textarea#dmChatInput{
+    flex:1; background:var(--dm-surface2); border:none; outline:none; border-radius:22px; padding:10px 16px; color:var(--dm-text); font-size:14.5px; font-family:inherit;
+    resize:none; overflow-y:hidden; max-height:110px; line-height:1.35; white-space:pre-wrap; word-break:break-word; overflow-wrap:anywhere;
+  }
   .dm-attach-btn{ width:40px; height:40px; border-radius:50%; border:none; background:none; color:var(--dm-muted); display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; font-size:20px; }
   .dm-attach-btn:active{ background:var(--dm-surface2); }
   .dm-send-btn{ width:40px; height:40px; border-radius:50%; border:none; background:var(--dm-out); color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; font-size:16px; }
@@ -4127,8 +4131,9 @@ button,input,textarea,select{max-width:100%;}
       <div class="dm-emoji-picker" id="dmEmojiPicker" style="display:none;"></div>
       <button class="dm-emoji-btn" onclick="dmToggleEmojiPicker()" aria-label="Émojis">&#x1f60a;</button>
       <button class="dm-attach-btn" onclick="document.getElementById('dmFileInput').click()" aria-label="Joindre un fichier">&#x1f4ce;</button>
-      <input type="text" id="dmChatInput" placeholder="Écris ton message…"
-             onkeydown="if(event.key==='Enter'){event.preventDefault();dmSendText();}">
+      <textarea id="dmChatInput" rows="1" placeholder="Écris ton message…"
+             oninput="dmAutoGrowInput(this)"
+             onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();dmSendText();}"></textarea>
       <button class="dm-send-btn" id="dmMicOrSendBtn" onclick="dmMicOrSendTap()">&#x1f3a4;</button>
     </div>
   </div>
@@ -7781,6 +7786,7 @@ async function dmSendText(){
   const body = input.value.trim();
   if(!body || !dmState.convId) return;
   input.value = '';
+  dmAutoGrowInput(input);
   try{
     const { error } = await sb.from('dm_messages').insert({
       conversation_id: dmState.convId, sender_id: sbUser.id, receiver_id: dmState.otherUser.id, type:'text', body
@@ -7788,8 +7794,21 @@ async function dmSendText(){
     if(error) throw error;
   }catch(e){
     console.error('dmSendText', e);
-    showToast('Message non envoyé', '&#x26a0;&#xfe0f;'); input.value = body;
+    showToast('Message non envoyé', '&#x26a0;&#xfe0f;'); input.value = body; dmAutoGrowInput(input);
   }
+}
+// AJOUT : le champ de saisie est un <textarea> (et non plus un <input>) pour
+// que le texte revienne à la ligne automatiquement au fur et à mesure de la
+// frappe, comme dans une vraie messagerie, au lieu de défiler horizontalement.
+// Cette fonction fait grandir la zone de texte avec le contenu (jusqu'à une
+// hauteur max, puis ça défile verticalement), et la remet à sa taille de
+// départ une fois le message envoyé.
+function dmAutoGrowInput(el){
+  if(!el) return;
+  el.style.height = 'auto';
+  const max = 110;
+  el.style.height = Math.min(el.scrollHeight, max) + 'px';
+  el.style.overflowY = el.scrollHeight > max ? 'auto' : 'hidden';
 }
 
 /* ---- Images & fichiers (2026-09-07) ----
@@ -7874,8 +7893,9 @@ function dmResetInputRow(){
   clearInterval(dmState.recTimer);
   dmState.isRecording = false;
   document.getElementById('dmChatInputRow').innerHTML = `
-    <input type="text" id="dmChatInput" placeholder="Écris ton message…"
-      onkeydown="if(event.key==='Enter'){event.preventDefault();dmSendText();}">
+    <textarea id="dmChatInput" rows="1" placeholder="Écris ton message…"
+      oninput="dmAutoGrowInput(this)"
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();dmSendText();}"></textarea>
     <button class="dm-send-btn" id="dmMicOrSendBtn" onclick="dmMicOrSendTap()">&#x1f3a4;</button>`;
   dmBindTypingBroadcast();
 }
