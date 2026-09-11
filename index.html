@@ -442,13 +442,18 @@
   .dm-bubble-wrap.out .dm-bubble-meta{ align-self:flex-end; }
   .dm-tick{ display:inline-flex; font-size:13px; line-height:1; letter-spacing:-2px; color:var(--dm-muted-soft); }
   .dm-tick.read{ color:#5BC7FF; }
-  .dm-voice-row{ display:flex; align-items:center; gap:9px; min-width:210px; }
-  .dm-voice-play{ width:36px; height:36px; border-radius:50%; border:none; flex-shrink:0; display:flex; align-items:center; justify-content:center; cursor:pointer; background:rgba(255,255,255,.16); color:inherit; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,.12); }
-  .dm-voice-play:active{ transform:scale(.94); }
-  .dm-voice-track{ flex:1; min-width:95px; }
-  .dm-voice-progress{ height:4px; border-radius:99px; background:rgba(255,255,255,.20); overflow:hidden; cursor:pointer; }
+  /* Bulle vocale compacte : le bouton play et la barre de progression sont
+     dans la MÊME ligne flex (plus de sous-bloc "track" empilé), donc ils
+     restent alignés sur le même axe visuel quelle que soit la durée. La
+     largeur totale est bornée (pas de min-width:210px qui gonflait la bulle
+     pour un vocal de quelques secondes). */
+  .dm-bubble-wrap.voice{ max-width:min(78%, 220px); }
+  .dm-voice-row{ display:flex; align-items:center; gap:8px; width:150px; max-width:100%; }
+  .dm-voice-play{ width:32px; height:32px; border-radius:50%; border:none; flex-shrink:0; display:flex; align-items:center; justify-content:center; cursor:pointer; background:rgba(255,255,255,.18); color:inherit; font-size:12.5px; box-shadow:0 2px 6px rgba(0,0,0,.12); transition:transform .12s; }
+  .dm-voice-play:active{ transform:scale(.9); }
+  .dm-voice-progress{ flex:1; min-width:0; height:4px; border-radius:99px; background:rgba(255,255,255,.20); overflow:hidden; cursor:pointer; align-self:center; }
   .dm-voice-progress > i{ display:block; height:100%; width:0; border-radius:99px; background:currentColor; opacity:.9; transition:width .08s linear; }
-  .dm-voice-times{ display:flex; justify-content:space-between; gap:6px; margin-top:4px; font-size:9px; opacity:.72; }
+  .dm-voice-times{ display:flex; justify-content:space-between; gap:6px; margin:4px 0 0 40px; font-size:9px; opacity:.72; }
   .dm-voice-dur{ font-size:11px; flex-shrink:0; min-width:30px; text-align:right; opacity:.8; }
   .dm-msg-actions{ display:flex; gap:4px; margin-left:5px; opacity:0; transform:scale(.85); transition:opacity .15s, transform .15s; pointer-events:none; }
   .dm-bubble-wrap:hover .dm-msg-actions,.dm-bubble-wrap:focus-within .dm-msg-actions,.dm-bubble-wrap.show-actions .dm-msg-actions{ opacity:1; transform:scale(1); pointer-events:auto; }
@@ -7684,11 +7689,9 @@ function dmAppendMessage(m, scroll){
   if(m.type === 'voice'){
     inner = `<div class="dm-voice-row">
       <button class="dm-voice-play" onclick="dmPlayVoice(this,'${esc(m.audio_url||'')}', '${esc(m.id||'')}')">&#9654;</button>
-      <div class="dm-voice-track">
-        <div class="dm-voice-progress" onclick="dmSeekVoice(event,this,'${esc(m.id||'')}')"><i></i></div>
-        <div class="dm-voice-times"><span data-voice-current="${esc(m.id||'')}">0:00</span><span>${m.audio_duration?dmVoiceTime(m.audio_duration):'0:00'}</span></div>
-      </div>
-    </div>`;
+      <div class="dm-voice-progress" onclick="dmSeekVoice(event,this,'${esc(m.id||'')}')"><i></i></div>
+    </div>
+    <div class="dm-voice-times"><span data-voice-current="${esc(m.id||'')}">0:00</span><span>${m.audio_duration?dmVoiceTime(m.audio_duration):'0:00'}</span></div>`;
   } else if(m.type === 'image'){
     inner = `<img src="${m.media_url}" alt="" onclick="dmOpenImageFull('${m.media_url}')" loading="lazy">`;
   } else if(m.type === 'file'){
@@ -7704,8 +7707,8 @@ function dmAppendMessage(m, scroll){
     inner = esc(m.body||'');
   }
   const wrap = document.createElement('div');
-  wrap.className = 'dm-bubble-wrap ' + (out?'out':'in') + (isFirstOfGroup?' first':'');
-  const bubbleClass = 'dm-bubble ' + (out?'out':'in') + (m.type==='image'?' dm-image-bubble':'');
+  wrap.className = 'dm-bubble-wrap ' + (out?'out':'in') + (isFirstOfGroup?' first':'') + (m.type==='voice'?' voice':'');
+  const bubbleClass = 'dm-bubble ' + (out?'out':'in') + (m.type==='image'?' dm-image-bubble':'') + (m.type==='voice'?' dm-voice-bubble':'');
   const tick = out ? `<span class="dm-tick ${m.read?'read':''}" data-tick="${m.id}">${m.read?'&#10003;&#10003;':'&#10003;'}</span><span class="dm-msg-status" data-status="${m.id}">${m.read?'Lu':'Envoyé'}</span>` : '';
   const del = `<span class="dm-msg-actions"><button class="dm-msg-delete" title="Supprimer pour les deux" onclick="event.stopPropagation();dmDeleteMessage('${esc(m.id||'')}')">&#128465;</button></span>`;
   wrap.innerHTML = `<div class="${bubbleClass}">${inner}</div><div class="dm-bubble-meta">${time}${tick}${del}</div>`;
@@ -8220,19 +8223,13 @@ async function dmStartCall(type){
 async function dmStartCallInner(type){
   if(!dmState.otherUser || !dmState.convId) return;
   if(dmState.currentCall){ showToast('Un appel est déjà en cours', '&#x26a0;&#xfe0f;'); return; }
-  // AJOUT (2026-09-11) : si le correspondant n'est pas connecté (voir
-  // dmOnlineUserIds / dmSetupPresence), inutile de faire sonner dans le vide
-  // pendant 45s — on prévient immédiatement et on annule avant même de
-  // toucher au micro/caméra.
-  // CORRECTIF (2026-09-11) : dmOnlineUserIds.has(...) seul ne suffisait pas —
-  // tant que la présence n'a pas fini de se synchroniser (démarrage de
-  // l'appli, reconnexion réseau), le Set est vide et TOUT le monde semblait
-  // "hors ligne", bloquant tous les appels à tort. dmIsConfidentlyOffline ne
-  // répond "oui" que si la présence a réellement fini de se synchroniser.
-  if(dmIsConfidentlyOffline(dmState.otherUser.id)){
-    showToast("Cet utilisateur n'est pas en ligne", '&#x1f4f4;');
-    return;
-  }
+  // RETRAIT (2026-09-11, demande utilisateur) : le blocage préventif sur
+  // dmIsConfidentlyOffline() générait de fausses erreurs "pas en ligne"
+  // (la présence Supabase Realtime n'est pas toujours fiable/à jour).
+  // On laisse désormais TOUJOURS l'appel partir : s'il n'y a réellement
+  // personne en face, l'appel sonnera simplement sans réponse côté
+  // correspondant, comme un appel téléphonique classique, au lieu d'être
+  // refusé côté appelant avant même d'essayer.
   // AJOUT (2026-09-11) : blocage des appels audio/vidéo par l'admin — voir
   // dmCallsBlockedForSelf. Les messages (texte, image, fichier, vocal)
   // restent autorisés même si les appels sont bloqués pour ce compte.
@@ -14432,6 +14429,91 @@ function lcShowJobSuccess(o,debited,remaining){
 .lc-pro-terms{margin:22px 16px 0;background:#fff;border:1px solid #e7dccb;border-radius:21px;padding:17px;box-shadow:0 8px 20px rgba(43,24,16,.05)}.lc-pro-terms-title{font-family:'Baloo 2';font-size:19px;font-weight:900;color:#2b1810;margin-bottom:11px}.lc-pro-terms ol{padding-left:20px;margin:0}.lc-pro-terms li{font-size:10px;line-height:1.55;color:#675b52;margin:0 0 8px}.lc-pro-final-note{margin:12px 16px 0!important;font-size:9.5px!important;line-height:1.5!important}
 @media(min-width:700px){.lc-pro-steps{grid-template-columns:repeat(4,1fr)}#lcJobsList.lc-jobs-list{display:grid;grid-template-columns:1fr 1fr}.lc-pro-filters{grid-template-columns:1fr 1fr 1.4fr!important}.lc-pro-filters input{grid-column:auto}.lc-pro-support-card ul{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:430px){.lc-pro-hero h2{font-size:25px}.lc-pro-steps{grid-template-columns:1fr}.lc-pro-support-card ul{grid-template-columns:1fr}.lc-pro-live{font-size:8px}.lc-pro-section-head h3{font-size:20px}}
+</style>
+
+<style id="dm-messagerie-family-polish">
+/* ============================================================
+   MESSAGERIE — redesign chaleureux, familial et animé (additif)
+   Objectif : remplacer le thème sombre/froid de la messagerie par
+   l'identité visuelle "crème/or/orange" du reste de l'application,
+   avec des micro-animations vivantes (bulles, avatars, boutons,
+   appels), sans toucher à la logique JS existante.
+   ============================================================ */
+:root{
+  --dm-bg:#FFF7E9;
+  --dm-surface:#FFFFFF;
+  --dm-surface2:#FCEBC9;
+  --dm-border:#F0DFC0;
+  --dm-out:linear-gradient(135deg,#F5B942 0%,#F2661D 100%);
+  --dm-out-solid:#F2661D;
+  --dm-out-text:#FFFFFF;
+  --dm-in:#FFFFFF;
+  --dm-in-text:#2B1810;
+  --dm-text:#2B1810;
+  --dm-muted:#8A7461;
+  --dm-muted-soft:#B49A80;
+  --dm-online:#33C36B;
+  --dm-danger:#FF5D6C;
+}
+.dm-chat-overlay{ background:var(--dm-bg); }
+.dm-chat-messages{
+  background-color:var(--dm-bg);
+  background-image:
+    radial-gradient(circle at 10% 10%, rgba(245,185,66,.16) 0, transparent 42%),
+    radial-gradient(circle at 90% 85%, rgba(242,102,29,.10) 0, transparent 46%),
+    repeating-linear-gradient(135deg, rgba(43,24,16,.025) 0 2px, transparent 2px 28px);
+}
+/* En-tête chaleureux, façon "carte" familiale plutôt que barre sombre */
+.dm-chat-header{
+  background:linear-gradient(120deg,#2B1810 0%,#5A2E12 55%,#D97706 150%);
+  border-bottom:none;
+  box-shadow:0 4px 16px rgba(43,24,16,.18);
+}
+.dm-chat-header .dm-chat-title .nm{ color:#fff; }
+.dm-chat-header .dm-chat-title .st{ color:rgba(255,255,255,.78); }
+.dm-chat-header button{ color:#fff; }
+.dm-chat-header .dm-avatar{ box-shadow:0 0 0 2px rgba(255,255,255,.35); }
+/* Avatars : petit halo doux + pulsation "en ligne" plus vive */
+.dm-avatar{ background:linear-gradient(135deg,#F5B942,#D97706); transition:transform .15s; }
+.dm-user-row:active .dm-avatar{ transform:scale(.93); }
+.dm-avatar.online::after{ background:#2ECC71; border-color:var(--dm-surface); }
+/* Bulles : entrée plus rebondie, texte lisible sur fond crème */
+@keyframes dmBubbleIn{ 0%{ opacity:0; transform:translateY(10px) scale(.92); } 60%{ opacity:1; transform:translateY(-2px) scale(1.015); } 100%{ opacity:1; transform:none; } }
+.dm-bubble.out{ background:var(--dm-out); color:var(--dm-out-text); box-shadow:0 4px 12px rgba(242,102,29,.28); }
+.dm-bubble.in{ background:var(--dm-in); color:var(--dm-in-text); border:1px solid var(--dm-border); box-shadow:0 2px 8px rgba(43,24,16,.06); }
+.dm-bubble-wrap.out.first .dm-bubble.out::after{ background:#F2661D; }
+.dm-bubble-wrap.in.first .dm-bubble.in::after{ background:var(--dm-in); border-left:1px solid var(--dm-border); border-bottom:1px solid var(--dm-border); }
+.dm-tick.read{ color:#FFE9B0; }
+.dm-bubble-wrap.in .dm-tick{ display:none; }
+/* Vocal : bouton play en dégradé "soleil", petite pulsation pendant la lecture */
+.dm-voice-play{ background:rgba(255,255,255,.28); }
+.dm-bubble.in .dm-voice-play{ background:linear-gradient(135deg,#F5B942,#F2661D); color:#fff; }
+.dm-bubble.out .dm-voice-play{ background:rgba(255,255,255,.30); color:#fff; }
+.dm-voice-progress{ background:rgba(0,0,0,.10); }
+.dm-bubble.out .dm-voice-progress{ background:rgba(255,255,255,.30); }
+/* Historique d'appels : puce ronde chaleureuse et vivante */
+.dm-call-log{ background:#fff; color:#8A7461; border:1px solid var(--dm-border); box-shadow:0 3px 10px rgba(43,24,16,.06); font-weight:800; }
+.dm-call-log.missed{ background:#FFF0F1; color:#E4485A; border-color:#FBD7DA; }
+.dm-call-log:active{ transform:scale(.95); }
+/* Zone de saisie : pilule crème et bouton d'envoi animé façon "bonbon" */
+.dm-chat-input-row{ background:var(--dm-surface); border-top:1px solid var(--dm-border); }
+.dm-chat-input-row input[type=text]{ background:var(--dm-surface2); color:var(--dm-text); }
+.dm-chat-input-row input[type=text]::placeholder{ color:var(--dm-muted); }
+.dm-attach-btn{ color:#D97706; }
+.dm-attach-btn:active{ background:var(--dm-surface2); }
+.dm-send-btn{ background:linear-gradient(135deg,#F5B942,#F2661D); box-shadow:0 4px 12px rgba(242,102,29,.35); transition:transform .12s; }
+.dm-send-btn:active{ transform:scale(.88) rotate(-6deg); }
+.dm-emoji-picker{ background:var(--dm-surface); border-color:var(--dm-border); }
+/* Liste des conversations : cartes plus rondes et vivantes */
+.dm-user-row{ transition:transform .12s, box-shadow .12s; }
+.dm-user-row:active{ transform:scale(.98); box-shadow:0 2px 6px rgba(43,24,16,.08); }
+.dm-conv-unread{ background:#F2661D; animation:dmUnreadPop .5s ease; }
+@keyframes dmUnreadPop{ 0%{ transform:scale(0);} 70%{ transform:scale(1.25);} 100%{ transform:scale(1);} }
+/* Boutons d'appel dans l'en-tête : petit rebond au clic pour un rendu vivant */
+#dmAudioCallBtn:active, #dmVideoCallBtn:active{ transform:scale(.82) rotate(-8deg); }
+@media (prefers-reduced-motion: reduce){
+  .dm-bubble-wrap, .dm-conv-unread, .dm-avatar.online::after{ animation:none !important; }
+}
 </style>
 </body>
 </html>
