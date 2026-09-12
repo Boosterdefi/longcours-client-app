@@ -8949,11 +8949,29 @@ async function renderAdminVideoLibrary(){
 async function adminUploadVideo(file, silent=false){
   if(!file || !sbUser) return false;
   const statusEl = document.getElementById('adminVideoUploadStatus');
-  if(statusEl){ statusEl.style.display='block'; statusEl.textContent = 'Envoi en cours…'; }
+  if(statusEl){ statusEl.style.display='block'; statusEl.textContent = 'Envoi en cours… 0%'; }
   try{
     const path = `${sbUser.id}/${Date.now()}_${file.name}`;
-    const { error: upErr } = await sb.storage.from('admin-videos').upload(path, file, { contentType: file.type || 'video/mp4' });
-    if(upErr) throw upErr;
+    const { data: sessionData } = await sb.auth.getSession();
+    const token = sessionData && sessionData.session && sessionData.session.access_token;
+    if(!token) throw new Error('Session expirée, reconnecte-toi.');
+    await new Promise((resolve, reject)=>{
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${SUPABASE_URL}/storage/v1/object/admin-videos/${encodeURIComponent(path)}`, true);
+      xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+      xhr.setRequestHeader('apikey', SUPABASE_ANON_KEY);
+      xhr.setRequestHeader('Content-Type', file.type || 'video/mp4');
+      xhr.upload.onprogress = function(e){
+        if(e.lengthComputable && statusEl){
+          statusEl.textContent = 'Envoi en cours… ' + Math.round((e.loaded/e.total)*100) + '%';
+        }
+      };
+      xhr.timeout = 8*60*1000; // 8 min : marge large pour vidéos lourdes sur réseau lent
+      xhr.onload = function(){ (xhr.status>=200 && xhr.status<300) ? resolve() : reject(new Error('Échec HTTP ' + xhr.status)); };
+      xhr.onerror = function(){ reject(new Error('Erreur réseau pendant l\'envoi')); };
+      xhr.ontimeout = function(){ reject(new Error('Délai dépassé, réessaie sur une meilleure connexion')); };
+      xhr.send(file);
+    });
     const { data: pub } = sb.storage.from('admin-videos').getPublicUrl(path);
     const title = file.name.replace(/\.[^.]+$/, '');
     const { error: insErr } = await sb.from('admin_call_videos').insert({ title, video_url: pub.publicUrl, created_by: sbUser.id });
@@ -8963,7 +8981,8 @@ async function adminUploadVideo(file, silent=false){
     await renderAdminVideoLibrary();
     return true;
   }catch(e){
-    if(statusEl){ statusEl.textContent = 'Échec de l\'envoi.'; }
+    console.error('[adminUploadVideo]', e && e.message, e);
+    if(statusEl){ statusEl.textContent = 'Échec de l\'envoi : ' + (e && e.message ? e.message : 'réessaie.'); }
     if(!silent) showToast('Échec de l\'ajout de la vidéo', '&#x26a0;&#xfe0f;');
     return false;
   }
@@ -14260,7 +14279,7 @@ function renderPlay(){ enterVolRougeInPlay(); }
 function renderMatchesTab(){ renderMatchSpace(); }
 
 /* ---------- Init ---------- */
-window.addEventListener('load', async ()=>{
+window.addEventListener('DOMContentLoaded', async ()=>{
   applyLanguage('fr');
   if('serviceWorker' in navigator){
     navigator.serviceWorker.register('sw.js').then((reg) => {
