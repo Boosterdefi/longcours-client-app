@@ -4521,15 +4521,19 @@ function setVisibleInterval(callback, ms){
 
 /* ---------- Auth ---------- */
 async function sbSignUp(email, password, firstName){
-  const { data, error } = await sb.auth.signUp({ email, password });
+  // CORRECTIF (2026-09-12) : le prénom est désormais transmis en métadonnée
+  // dès la création du compte. Le déclencheur serveur handle_new_user() le
+  // lit directement et l'écrit dans profiles DANS LA MÊME transaction que
+  // la création du compte — plus besoin d'un 2e appel réseau séparé après
+  // coup, qui pouvait échouer silencieusement (réseau lent/instable) et
+  // laisser first_name à NULL pour tout le monde ("Utilisateur" générique).
+  const { data, error } = await sb.auth.signUp({ email, password, options: { data: { first_name: firstName } } });
   if(error) throw error;
   sbUser = data.user;
   if(sbUser){
-    // BUGFIX (2026-09-07) : cette écriture échouait silencieusement (droit SQL
-    // UPDATE manquant sur profiles pour le rôle authenticated), l'erreur
-    // n'étant jamais lue ni journalisée. Le prénom restait donc à NULL côté
-    // serveur pour tout le monde, d'où l'affichage générique "Utilisateur"
-    // partout où le profil est consulté par un tiers (recherche, DM, appels).
+    // Filet de sécurité : si jamais le déclencheur serveur n'a pas pu lire
+    // la métadonnée pour une raison quelconque, on retente une écriture
+    // directe (sans bloquer l'inscription si elle échoue).
     const { error: profileErr } = await sb.from('profiles').update({ first_name: firstName }).eq('id', sbUser.id);
     if(profileErr) console.error('[sbSignUp] échec écriture prénom sur profiles:', profileErr.message, profileErr);
   }
