@@ -8974,7 +8974,12 @@ async function adminUploadVideo(file, silent=false){
         }
       };
       xhr.timeout = 8*60*1000; // 8 min : marge large pour vidéos lourdes sur réseau lent
-      xhr.onload = function(){ (xhr.status>=200 && xhr.status<300) ? resolve() : reject(new Error('Échec HTTP ' + xhr.status)); };
+      xhr.onload = function(){
+        if(xhr.status>=200 && xhr.status<300){ resolve(); return; }
+        let reason = xhr.responseText || '';
+        try{ const j = JSON.parse(reason); reason = j.message || j.error || reason; }catch(e){}
+        reject(new Error('HTTP ' + xhr.status + (reason ? ' — ' + reason : '')));
+      };
       xhr.onerror = function(){ reject(new Error('Erreur réseau pendant l\'envoi')); };
       xhr.ontimeout = function(){ reject(new Error('Délai dépassé, réessaie sur une meilleure connexion')); };
       xhr.send(file);
