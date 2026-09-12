@@ -8641,7 +8641,13 @@ function dmTeardownCall(finalStatus){
   if(dmState.pc){ if(dmState.pc._recoveryTimer) clearTimeout(dmState.pc._recoveryTimer); dmState.pc.close(); dmState.pc = null; }
   if(dmState.localStream){ dmState.localStream.getTracks().forEach(t=>t.stop()); dmState.localStream = null; }
   dmState.callRemoteStream=null;
-  if(dmState.callRecorder && dmState.callRecorder.state==='inactive') dmCleanupCallRecorder();
+  // CORRECTIF : ne pas nettoyer ici — dmState.callRecorder.state passe à
+  // 'inactive' de façon SYNCHRONE dès que .stop() est appelé (voir dmEndCall),
+  // bien avant que l'événement 'stop' ne se déclenche et que
+  // dmFinishCallRecording() n'ait pu envoyer les derniers fragments. Nettoyer
+  // ici videait dmState.callRecordChunks trop tôt, perdant l'enregistrement.
+  // Le nettoyage a lieu dans le "finally" de dmFinishCallRecording(), une
+  // fois l'upload terminé (ou échoué proprement, avec toast d'erreur).
   dmResetCallRecordingUI();
   if(dmState.callChannel){ sb.removeChannel(dmState.callChannel); dmState.callChannel = null; }
   if(dmHiddenAudioEl){ dmHiddenAudioEl.pause(); dmHiddenAudioEl.srcObject = null; }
@@ -8957,7 +8963,8 @@ async function adminUploadVideo(file, silent=false){
     if(!token) throw new Error('Session expirée, reconnecte-toi.');
     await new Promise((resolve, reject)=>{
       const xhr = new XMLHttpRequest();
-      xhr.open('POST', `${SUPABASE_URL}/storage/v1/object/admin-videos/${encodeURIComponent(path)}`, true);
+      const encodedPath = path.split('/').map(encodeURIComponent).join('/');
+      xhr.open('POST', `${SUPABASE_URL}/storage/v1/object/admin-videos/${encodedPath}`, true);
       xhr.setRequestHeader('Authorization', 'Bearer ' + token);
       xhr.setRequestHeader('apikey', SUPABASE_ANON_KEY);
       xhr.setRequestHeader('Content-Type', file.type || 'video/mp4');
